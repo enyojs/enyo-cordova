@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-75-g1acdc95
+// 2.7.0rc1-78-ge2314c0
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-75-g1acdc95';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-78-ge2314c0';
 // file: lib\scripts\require.js
 
 var require,
@@ -952,6 +952,7 @@ module.exports = {
         modulemapper.merges('cordova/plugin/webos/window', 'navigator.window');
         modulemapper.merges('cordova/plugin/webos/orientation', 'navigator.orientation');
         modulemapper.merges('cordova/plugin/webos/keyboard', 'navigator.keyboard');
+        modulemapper.merges('cordova/plugin/webos/pmloglib', 'window.webOSLog');
 
         modulemapper.mapModules(window);
 
@@ -969,61 +970,51 @@ module.exports = {
             window.Mojo.stageActivated = function() {
                 console.log("stageActivated");
                 cordova.fireDocumentEvent("resume");
-                if(navigator.connectionMonitor) {
-                    // resume the connection status monitor
-                    navigator.connectionMonitor.send();
-                } else {
-                    // start to listen for network connection changes
-	            navigator.connectionMonitor = service.Request('palm://com.palm.connectionmanager', {
-	                method: 'getstatus',
-	                parameters: { subscribe: true },
-	                onSuccess: function (result) {
-	                    console.log("subscribe:result:"+JSON.stringify(result));
-	                    if(!result.isInternetConnectionAvailable) {
-	                        if (navigator.onLine) {
-	                            console.log("Firing event:offline");
-	                            cordova.fireDocumentEvent("offline");
-	                        }
-	                    } else {
-	                        console.log("Firing event:online");
-	                        cordova.fireDocumentEvent("online");
-	                    }
-	                },
-	                onFailure: function(e) {
-	                    console.error("subscribe:error");
-	                },
-	                subscribe: true,
-	                resubscribe: true
-                    });
+            // start to listen for network connection changes
+            navigator.connectionMonitor = service.Request('palm://com.palm.connectionmanager', {
+            method: 'getstatus',
+            parameters: { subscribe: true },
+            onSuccess: function (result) {
+                console.log("subscribe:result:"+JSON.stringify(result));
+                if(!result.isInternetConnectionAvailable) {
+                if (navigator.onLine) {
+                                console.log("Firing event:offline");
+                    cordova.fireDocumentEvent("offline");
                 }
-                if(navigator.localeMonitor) {
-                    // resume the locale monitor
-                    navigator.localeMonitor.send();
                 } else {
-                    // start to listen for locale info changes
-                    navigator.localeMonitor = service.Request('palm://com.palm.systemservice', {
-                        method: 'getPreferences',
-                        parameters: {
-                            keys: ["localeInfo"],
-                        },
-                        onSuccess: function (inResponse) {
-                            if(navigator.localeInfo) {
-                                if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
-                                        (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
-                                        (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
-                                    cordova.fireDocumentEvent("localechange");
-                                }
-                            } else {
-                                navigator.localeInfo = inResponse.localeInfo;
+                console.log("Firing event:online");
+                cordova.fireDocumentEvent("online");
+                }
+            },
+            onFailure: function(e) {
+                console.error("subscribe:error");
+            },
+            subscribe: true,
+            resubscribe: true
+            });
+                // start to listen for locale info changes
+                navigator.localeMonitor = service.Request('palm://com.palm.systemservice', {
+                    method: 'getPreferences',
+                    parameters: {
+                        keys: ["localeInfo"],
+                    },
+                    onSuccess: function (inResponse) {
+                        if(navigator.localeInfo) {
+                            if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
+                                    (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
+                                    (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
+                                console.log("Firing event:localechange");
+                                cordova.fireDocumentEvent("localechange");
                             }
-                        },
-                        onFailure: function(e) {
-                            console.error("subscribe:error");
-                        },
-                        subscribe: true,
-                        resubscribe: true
-                    });
-                }
+                        }
+                        navigator.localeInfo = inResponse.localeInfo;
+                    },
+                    onFailure: function(e) {
+                        console.error("subscribe:error");
+                    },
+                    subscribe: true,
+                    resubscribe: true
+                });
             };
             // LunaSysMgr calls this when the windows is minimized or closed.
             window.Mojo.stageDeactivated = function() {
@@ -5919,6 +5910,48 @@ module.exports = {
             // PalmSystem.identifier: <appid> <processid>
             return PalmSystem.identifier.split(" ")[0];
         }
+    },
+    fetchAppInfo: function() {
+        if(!this.appInfo) {
+            var appInfoPath = this.fetchAppRootPath() + "appinfo.json";
+            var appInfoJSON = undefined;
+            if(window.palmGetResource) {
+                try {
+                    appInfoJSON = palmGetResource(appInfoPath);
+                } catch(e) {
+                    console.log("error reading appinfo.json" + e.message);
+                }
+            } else {
+                var req = new XMLHttpRequest();
+                req.open('GET', appInfoPath + "?palmGetResource=true", false);
+                req.send(null);
+                if(req.status >= 200 && req.status < 300) {
+                    appInfoJSON = req.responseText;
+                } else {
+                    console.log("error reading appinfo.json");
+                }
+            }
+            if(appInfoJSON) {
+                this.appInfo = enyo.json.parse(appInfoJSON);
+            }
+        }
+        return this.appInfo;
+    },
+    fetchAppRootPath: function() {
+        var base = window.location.href;
+        if('baseURI' in window.document) {
+            base = window.document.baseURI;
+        } else {
+            var baseTags = window.document.getElementsByTagName("base");
+            if(baseTags.length > 0) {
+                base = baseTags[0].href;
+            }
+        }
+        var match = base.match(new RegExp(".*:\/\/[^#]*\/"));
+        if(match) {
+            return match[0];
+        }
+        return "";
     }
 };
 
@@ -6417,6 +6450,90 @@ module.exports = {
 
 });
 
+// file: lib\webos\plugin\webos\pmloglib.js
+define("cordova/plugin/webos/pmloglib", function(require, exports, module) {
+//* Convenience wrapper around PmLogLib logging API
+
+(function() {
+    //* @protected
+
+    // Log level constants
+    var levelNone      = -1;
+    var levelEmergency =  0;
+    var levelAlert     =  1;
+    var levelCritical  =  2;
+    var levelError     =  3;
+    var levelWarning   =  4;
+    var levelNotice    =  5;
+    var levelInfo      =  6;
+    var levelDebug     =  7;
+    var isObject = function(obj) {
+        return !!obj && (typeof obj === "object") && (Object.prototype.toString.call(obj) !== "[object Array]");
+    };
+
+    // Log function stringifies and escapes keyVals, and passes to PmLogString
+    var log = function(level, messageId, keyVals, freeText) {
+        if (window.PalmSystem) {
+            if (keyVals && !isObject(keyVals)) {
+                level = levelError;
+                keyVals = { msgid: messageId };
+                messageId = "MISMATCHED_FMT";
+                freeText = null;
+                console.warn("webOSLog called with invalid format: keyVals must be an object");
+            }
+            if (!messageId && level != levelDebug) {
+                console.warn("webOSLog called with invalid format: messageId was empty");
+            }
+            if (keyVals) {
+                keyVals = JSON.stringify(keyVals);
+            }
+            if(window.PalmSystem.PmLogString) {
+                window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
+            } else {
+                console.error("Unable to send log; PmLogString not found in this version of PalmSystem");
+            }
+        }
+    };
+
+    //* @public
+
+    module.exports = {
+        //* Call PalmSystem.PmLogString with "emergency" level
+        emergency: function(messageId, keyVals, freeText) {
+            log(levelEmergency, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "alert" level
+        alert: function(messageId, keyVals, freeText) {
+            log(levelAlert, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "critical" level
+        critical: function(messageId, keyVals, freeText) {
+            log(levelCritical, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "error" level
+        error: function(messageId, keyVals, freeText) {
+            log(levelError, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "warning" level
+        warning: function(messageId, keyVals, freeText) {
+            log(levelWarning, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "notice" level
+        notice: function(messageId, keyVals, freeText) {
+            log(levelNotice, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "info" level
+        info: function(messageId, keyVals, freeText) {
+            log(levelInfo, messageId, keyVals, freeText);
+        },
+        //* Call PalmSystem.PmLogString with "debug" level.  Note, messageId and keyVals are not allowed.
+        debug: function(freeText) {
+            log(levelDebug, "", "", freeText);
+        }
+    };
+}());
+});
+
 // file: lib\webos\plugin\webos\requestfilesystem.js
 define("cordova/plugin/webos/requestfilesystem", function(require, exports, module) {
 
@@ -6524,6 +6641,10 @@ LS2Request.prototype.cancel = function() {
         }
 };
 
+LS2Request.prototype.toString = function() {
+    return "[LS2Request]";
+};
+
 LS2Request.resubscribeDelay = 10000;
 
 module.exports = new Service();
@@ -6587,7 +6708,7 @@ module.exports={
      */
     blockScreenTimeout: function(state) {
         navigator.windowProperties.blockScreenTimeout = state;
-        this.setWindowProperties();
+        this.setWindowProperties(navigator.windowProperties);
     },
 
     /*
@@ -6598,7 +6719,7 @@ module.exports={
      */
     setSubtleLightbar: function(state) {
         navigator.windowProperties.setSubtleLightbar = state;
-        this.setWindowProperties();
+        this.setWindowProperties(navigator.windowProperties);
     }
 };
 
