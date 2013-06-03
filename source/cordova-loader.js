@@ -3,7 +3,7 @@ Loads the cordova.js file for the current platform.
 */
 //* @protected
 (function(ctx){
-	if(!window.cordova && !window.PhoneGap) {
+	if(!ctx.cordova && !ctx.PhoneGap) {
 		var cordovaVersion = ctx.useCordovaVersion || "2.7.0";
 		var cordovaSupport = [
 			{platform: "android"},
@@ -18,7 +18,7 @@ Loads the cordova.js file for the current platform.
 			var p = enyo.platform[c.platform];
 			if (p) {
 				if (!c.version || p >= c.version) {
-					var fn = "cordova-js-" + cordovaVersion + "/cordova." + (c.cordovaFilename || c.platform) + ".js";
+					var fn = "$lib/enyo-cordova/source/cordova-js-" + cordovaVersion + "/cordova." + (c.cordovaFilename || c.platform) + ".js";
 					enyo.depends(fn);
 					return;
 				}
