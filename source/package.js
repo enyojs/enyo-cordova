@@ -1,4 +1,3 @@
 enyo.depends(
-	"cordova-loader.js",
-	"pmloglib.js"
+	"cordova-loader.js"
 );
