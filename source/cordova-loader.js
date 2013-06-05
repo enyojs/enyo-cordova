@@ -29,7 +29,7 @@ Loads the cordova.js file for the current platform.
 			}
 		}
 		if (platform) {
-			var fn = "$lib/enyo-cordova/source/cordova-js-" + cordovaVersion + "/cordova." + platform + ".js";
+			var fn = "$lib/enyo-cordova/assets/cordova-js-" + cordovaVersion + "/cordova." + platform + ".js";
 			enyo.depends(fn);
 		} else {
 			enyo.warn("Cordova not loaded: Current platform not supported.");
