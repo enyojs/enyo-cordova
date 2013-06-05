@@ -13,18 +13,27 @@ Loads the cordova.js file for the current platform.
 			{platform: "windowsPhone", version: 7, cordovaFilename: "wp7"},
 			{platform: "blackberry"}
 		];
-		for (var i=0; i<cordovaSupport.length; i++) {
-			var c = cordovaSupport[i];
-			var p = enyo.platform[c.platform];
-			if (p) {
-				if (!c.version || p >= c.version) {
-					var fn = "$lib/enyo-cordova/source/cordova-js-" + cordovaVersion + "/cordova." + (c.cordovaFilename || c.platform) + ".js";
-					enyo.depends(fn);
-					return;
+		var platform;
+		if (window.PalmSystem) {
+			platform = "webos";
+		} else {
+			for (var i=0; i<cordovaSupport.length; i++) {
+				var c = cordovaSupport[i];
+				var p = enyo.platform[c.platform];
+				if (p) {
+					if (!c.version || p >= c.version) {
+						platform = (c.cordovaFilename || c.platform);
+						break;
+					}
 				}
 			}
 		}
-		enyo.warn("Cordova not loaded: Current platform not supported.");
+		if (platform) {
+			var fn = "$lib/enyo-cordova/source/cordova-js-" + cordovaVersion + "/cordova." + platform + ".js";
+			enyo.depends(fn);
+		} else {
+			enyo.warn("Cordova not loaded: Current platform not supported.");
+		}
 	} else {
 		enyo.warn("External cordova.js build in use, skipping script injection");
 	}
