@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-88-gb60ce30
+// 2.7.0rc1-89-g64b4fe9
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-88-gb60ce30';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-89-g64b4fe9';
 // file: lib\scripts\require.js
 
 var require,
@@ -6050,7 +6050,7 @@ module.exports = {
         onSuccess: function(result) {
             window.device.uuid = result["com.palm.properties.nduid"];
         }
-    });
+    })
 };
 
 });
