@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-78-ge2314c0
+// 2.7.0rc1-88-gb60ce30
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-78-ge2314c0';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-88-gb60ce30';
 // file: lib\scripts\require.js
 
 var require,
@@ -952,7 +952,7 @@ module.exports = {
         modulemapper.merges('cordova/plugin/webos/window', 'navigator.window');
         modulemapper.merges('cordova/plugin/webos/orientation', 'navigator.orientation');
         modulemapper.merges('cordova/plugin/webos/keyboard', 'navigator.keyboard');
-        modulemapper.merges('cordova/plugin/webos/pmloglib', 'window.webOSLog');
+        modulemapper.merges('cordova/plugin/webos/pmloglib', 'window.webOS');
 
         modulemapper.mapModules(window);
 
@@ -963,6 +963,61 @@ module.exports = {
         // create global Mojo object if it does not exist
         Mojo = window.Mojo || {};
 
+        //connection monitor subscription
+        navigator.connectionMonitor = navigator.connectionMonitor || {};
+        navigator.connectionMonitor.start = function() {
+            navigator.connectionMonitor.request = service.Request('palm://com.palm.connectionmanager', {
+                method: 'getstatus',
+                parameters: { subscribe: true },
+                onSuccess: function (result) {
+                    console.log("subscribe:result:"+JSON.stringify(result));
+                    if(!result.isInternetConnectionAvailable) {
+                        if (navigator.onLine) {
+                            console.log("Firing event:offline");
+                            cordova.fireDocumentEvent("offline");
+                        }
+                    } else {
+                        console.log("Firing event:online");
+                        cordova.fireDocumentEvent("online");
+                    }
+                },
+                onFailure: function(e) {
+                    console.error("subscribe:error");
+                },
+                subscribe: true,
+                resubscribe: true
+            });
+        };
+        navigator.connectionMonitor.start();
+
+        //locale monitor subscription
+        navigator.localeMonitor = navigator.localeMonitor || {};
+        navigator.localeMonitor.start = function() {
+            navigator.localeMonitor.request = service.Request('palm://com.palm.systemservice', {
+                method: 'getPreferences',
+                parameters: {
+                    keys: ["localeInfo"],
+                },
+                onSuccess: function (inResponse) {
+                    if(navigator.localeInfo) {
+                        if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
+                                (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
+                                (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
+                            console.log("Firing event:localechange");
+                            cordova.fireDocumentEvent("localechange");
+                        }
+                    }
+                    navigator.localeInfo = inResponse.localeInfo;
+                },
+                onFailure: function(e) {
+                    console.error("subscribe:error");
+                },
+                subscribe: true,
+                resubscribe: true
+            });
+        };
+        navigator.localeMonitor.start();
+
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
 
@@ -970,62 +1025,28 @@ module.exports = {
             window.Mojo.stageActivated = function() {
                 console.log("stageActivated");
                 cordova.fireDocumentEvent("resume");
-            // start to listen for network connection changes
-            navigator.connectionMonitor = service.Request('palm://com.palm.connectionmanager', {
-            method: 'getstatus',
-            parameters: { subscribe: true },
-            onSuccess: function (result) {
-                console.log("subscribe:result:"+JSON.stringify(result));
-                if(!result.isInternetConnectionAvailable) {
-                if (navigator.onLine) {
-                                console.log("Firing event:offline");
-                    cordova.fireDocumentEvent("offline");
+                // start to listen for network connection changes if needed
+                if(!navigator.connectionMonitor.request) {
+                    navigator.connectionMonitor.start();
                 }
-                } else {
-                console.log("Firing event:online");
-                cordova.fireDocumentEvent("online");
+
+                // start to listen for locale info changes if needed
+                if(!navigator.localeMonitor.request) {
+                    navigator.localeMonitor.start();
                 }
-            },
-            onFailure: function(e) {
-                console.error("subscribe:error");
-            },
-            subscribe: true,
-            resubscribe: true
-            });
-                // start to listen for locale info changes
-                navigator.localeMonitor = service.Request('palm://com.palm.systemservice', {
-                    method: 'getPreferences',
-                    parameters: {
-                        keys: ["localeInfo"],
-                    },
-                    onSuccess: function (inResponse) {
-                        if(navigator.localeInfo) {
-                            if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
-                                    (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
-                                    (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
-                                console.log("Firing event:localechange");
-                                cordova.fireDocumentEvent("localechange");
-                            }
-                        }
-                        navigator.localeInfo = inResponse.localeInfo;
-                    },
-                    onFailure: function(e) {
-                        console.error("subscribe:error");
-                    },
-                    subscribe: true,
-                    resubscribe: true
-                });
             };
             // LunaSysMgr calls this when the windows is minimized or closed.
             window.Mojo.stageDeactivated = function() {
                 console.log("stageDeactivated");
                 cordova.fireDocumentEvent("pause");
                 // stop subscription-based monitors on stage deactivation
-                if(navigator.connectionMonitor) {
-                    navigator.connectionMonitor.cancel();
+                if(navigator.connectionMonitor.request) {
+                    navigator.connectionMonitor.request.cancel();
+                    navigator.connectionMonitor.request = undefined;
                 }
-                if(navigator.localeMonitor) {
-                    navigator.localeMonitor.cancel();
+                if(navigator.localeMonitor.request) {
+                    navigator.localeMonitor.request.cancel();
+                    navigator.localeMonitor.request = undefined;
                 }
             };
             // LunaSysMgr calls this when a KeepAlive app's window is hidden
@@ -5992,16 +6013,16 @@ var CompassHeading = require('cordova/plugin/CompassHeading'),
     CompassError = require('cordova/plugin/CompassError');
 
 module.exports = {
-    getHeading: function (win, lose) {
+    getCurrentHeading: function(onSuccess, onError) {
         // only TouchPad and Pre3 have a Compass/Gyro
         if (window.device.name !== "TouchPad" && window.device.name !== "Prē3") {
-            lose({code: CompassError.COMPASS_NOT_SUPPORTED});
+            onError({code: CompassError.COMPASS_NOT_SUPPORTED});
         } else {
-            console.error("webos plugin compass getheading");
+            console.log("webos plugin compass getheading");
             var onReadingChanged = function (e) {
                 var heading = new CompassHeading(e.magHeading, e.trueHeading);
                 document.removeEventListener("compass", onReadingChanged);
-                win(heading);
+                onSuccess(heading);
             };
             document.addEventListener("compass", onReadingChanged);
         }
@@ -6014,27 +6035,22 @@ module.exports = {
 define("cordova/plugin/webos/device", function(require, exports, module) {
 
 var service = require('cordova/plugin/webos/service');
+var deviceInfo = JSON.parse(PalmSystem.deviceInfo);
 
 module.exports = {
-    getDeviceInfo: function(success, fail, args) {
-        console.log("webOS Plugin: Device - getDeviceInfo");
-
-        service.Request('palm://com.palm.preferences/systemProperties', {
-            method:"Get",
-            parameters:{"key": "com.palm.properties.nduid" },
-            onSuccess: function (result) {
-                var parsedData = JSON.parse(PalmSystem.deviceInfo);
-
-                success({
-                    cordova: "2.2.0",
-                    platform: "HP webOS",
-                    name: parsedData.modelName,
-                    version: parsedData.platformVersion,
-                    uuid: result["com.palm.properties.nduid"]
-                });
-            }
-        });
-    }
+    name: deviceInfo.modelName,
+    model: deviceInfo.modelName,
+    version: deviceInfo.platformVersion,
+    platform: "webOS",
+    cordova: "2.7.0",
+    uuid: "",
+    uuidRequest: service.Request('palm://com.palm.preferences/systemProperties', {
+        method:"Get",
+        parameters:{"key": "com.palm.properties.nduid"},
+        onSuccess: function(result) {
+            window.device.uuid = result["com.palm.properties.nduid"];
+        }
+    });
 };
 
 });
@@ -6279,6 +6295,7 @@ module.exports = {
                 var info={};
                 if (!result.isInternetConnectionAvailable) { info.type=Connection.NONE; }
                 if (result.wifi && result.wifi.onInternet) { info.type=Connection.WIFI; }
+                if (result.wired && result.wired.onInternet) { info.type=Connection.ETHERNET; }
                 if (result.wan && result.wan.state==="connected") { info.type=Connection.CELL_2G; }
 
                 successCallback(info.type);
@@ -6575,7 +6592,7 @@ function LS2Request(uri, params) {
             this.uri += "/";
         }
         this.uri += params.method;
-    }    
+    }
     if(typeof params.onSuccess === 'function') {
         this.onSuccess = params.onSuccess;
     }
