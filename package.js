@@ -1,3 +1,3 @@
 enyo.depends(
-	"source"
+	"cordova-loader.js"
 );
