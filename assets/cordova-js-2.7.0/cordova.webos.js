@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-89-g64b4fe9
+// 2.7.0rc1-92-g10923cb
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-89-g64b4fe9';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-92-g10923cb';
 // file: lib\scripts\require.js
 
 var require,
@@ -6035,22 +6035,40 @@ module.exports = {
 define("cordova/plugin/webos/device", function(require, exports, module) {
 
 var service = require('cordova/plugin/webos/service');
-var deviceInfo = JSON.parse(PalmSystem.deviceInfo);
 
 module.exports = {
-    name: deviceInfo.modelName,
-    model: deviceInfo.modelName,
-    version: deviceInfo.platformVersion,
-    platform: "webOS",
-    cordova: "2.7.0",
-    uuid: "",
-    uuidRequest: service.Request('palm://com.palm.preferences/systemProperties', {
-        method:"Get",
-        parameters:{"key": "com.palm.properties.nduid"},
-        onSuccess: function(result) {
-            window.device.uuid = result["com.palm.properties.nduid"];
+    getDeviceInfo: function(successCallback, failureCallback) {
+        var deviceInfo = undefined;
+        try {
+            deviceInfo = JSON.parse(PalmSystem.deviceInfo);
+        } catch(e) {
+            failureCallback(e)
         }
-    })
+        service.Request('palm://com.palm.preferences/systemProperties', {
+            method:"Get",
+            parameters:{"key": "com.palm.properties.nduid"},
+            onSuccess: function(result) {
+                successCallback({
+                    name: deviceInfo.modelName,
+                    model: deviceInfo.modelName,
+                    version: deviceInfo.platformVersion,
+                    platform: "webOS",
+                    cordova: "2.7.0",
+                    uuid: result["com.palm.properties.nduid"]
+                });
+            },
+            onFailure: function(err) {
+                successCallback({
+                    name: deviceInfo.modelName,
+                    model: deviceInfo.modelName,
+                    version: deviceInfo.platformVersion,
+                    platform: "webOS",
+                    cordova: "2.7.0",
+                    uuid: ""
+                });
+            }
+        });
+    }
 };
 
 });
