@@ -1,4 +1,4 @@
-// Platform: osx
+// Platform: firefoxos
 // 2.7.0rc1-128-gbab9173
 /*
  Licensed to the Apache Software Foundation (ASF) under one
@@ -788,110 +788,43 @@ module.exports = {
 };
 });
 
-// file: lib\osx\exec.js
+// file: lib\firefoxos\exec.js
 define("cordova/exec", function(require, exports, module) {
 
 /**
- * Creates a gap bridge used to notify the native code about commands.
-
- * @private
+ * Execute a cordova command.  It is up to the native side whether this action
+ * is synchronous or asynchronous.  The native side can return:
+ *      Synchronous: PluginResult object as a JSON string
+ *      Asynchrounous: Empty string ""
+ * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
+ * depending upon the result of the action.
+ *
+ * @param {Function} success    The success callback
+ * @param {Function} fail       The fail callback
+ * @param {String} service      The name of the service to use
+ * @param {String} action       Action to be run in cordova
+ * @param {String[]} [args]     Zero or more arguments to pass to the method
  */
-var cordova = require('cordova'),
-    channel = require('cordova/channel'),
-    utils = require('cordova/utils');
 
-
-function massageMessageNativeToJs(message) {
-    if (message.CDVType == 'ArrayBuffer') {
-        var stringToArrayBuffer = function(str) {
-            var ret = new Uint8Array(str.length);
-            for (var i = 0; i < str.length; i++) {
-                ret[i] = str.charCodeAt(i);
-            }
-            return ret.buffer;
-        };
-        var base64ToArrayBuffer = function(b64) {
-            return stringToArrayBuffer(atob(b64));
-        };
-        message = base64ToArrayBuffer(message.data);
-    }
-    return message;
-}
-
-function convertMessageToArgsNativeToJs(message) {
-    var args = [];
-    if (!message || !message.hasOwnProperty('CDVType')) {
-        args.push(message);
-    } else if (message.CDVType == 'MultiPart') {
-        message.messages.forEach(function(e) {
-            args.push(massageMessageNativeToJs(e));
-        });
-    } else {
-        args.push(massageMessageNativeToJs(message));
-    }
-    return args;
-}
-
-function massageArgsJsToNative(args) {
-    if (!args || utils.typeName(args) != 'Array') {
-       return args;
-    }
-    var ret = [];
-    var encodeArrayBufferAs8bitString = function(ab) {
-        return String.fromCharCode.apply(null, new Uint8Array(ab));
-    };
-    var encodeArrayBufferAsBase64 = function(ab) {
-        return window.btoa(encodeArrayBufferAs8bitString(ab));
-    };
-    args.forEach(function(arg, i) {
-        if (utils.typeName(arg) == 'ArrayBuffer') {
-            ret.push({
-                'CDVType': 'ArrayBuffer',
-                'data': encodeArrayBufferAsBase64(arg)
-            });
-        } else {
-            ret.push(arg);
-        }
-    });
-    return ret;
-}
-
-function OSXExec() {
-
-    var successCallback, failCallback, service, action, actionArgs, splitCommand;
-    var callbackId = 'INVALID';
-
-    successCallback = arguments[0];
-    failCallback = arguments[1];
-    service = arguments[2];
-    action = arguments[3];
-    actionArgs = arguments[4];
-
-    // Register the callbacks and add the callbackId to the positional
-    // arguments if given.
-    if (successCallback || failCallback) {
-        callbackId = service + cordova.callbackId++;
-        cordova.callbacks[callbackId] =
-            {success:successCallback, fail:failCallback};
-    }
-
-     actionArgs = massageArgsJsToNative(actionArgs);
-
-    if (window.cordovabridge && window.cordovabridge.exec) {
-        window.cordovabridge.exec(callbackId, service, action, actionArgs);
-    } else {
-        alert('window.cordovabridge binding is missing.');
-    }
-}
-
-
-OSXExec.nativeCallback = function(callbackId, status, message, keepCallback) {
-    var success = status === 0 || status === 1;
-    var args = convertMessageToArgsNativeToJs(message);
-    cordova.callbackFromNative(callbackId, success, status, args, keepCallback);
+var plugins = {
+    "Device": require('cordova/plugin/firefoxos/device'),
+    "NetworkStatus": require('cordova/plugin/firefoxos/network'),
+    "Accelerometer" : require('cordova/plugin/firefoxos/accelerometer')
+    //"Notification" : require('cordova/plugin/firefoxos/notification')
 };
 
-module.exports = OSXExec;
+module.exports = function(success, fail, service, action, args) {
+    try {
+        console.error("exec:call plugin:"+service+":"+action);
+        plugins[service][action](success, fail, args);
+    }
+    catch(e) {
+        console.error("missing exec: " + service + "." + action);
+        console.error(args);
+        console.error(e);
+        console.error(e.stack);
+    }
+};
 
 });
 
@@ -996,22 +929,14 @@ exports.reset();
 
 });
 
-// file: lib\osx\platform.js
+// file: lib\firefoxos\platform.js
 define("cordova/platform", function(require, exports, module) {
 
 module.exports = {
-    id: "osx",
-    initialize:function() {
-        var modulemapper = require('cordova/modulemapper');
-
-        modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
-
-        modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
-        modulemapper.mapModules(window);
+    id: "firefoxos",
+    initialize: function() {
     }
 };
-
-
 });
 
 // file: lib\common\plugin\Acceleration.js
@@ -4505,6 +4430,104 @@ var modulemapper = require('cordova/modulemapper');
 
 modulemapper.clobbers('cordova/plugin/FileTransfer', 'FileTransfer');
 modulemapper.clobbers('cordova/plugin/FileTransferError', 'FileTransferError');
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\accelerometer.js
+define("cordova/plugin/firefoxos/accelerometer", function(require, exports, module) {
+
+var cordova = require('cordova'),
+    callback;
+
+module.exports = {
+    start: function (win, fail, args) {
+        window.removeEventListener("devicemotion", callback);
+        callback = function (motion) {
+            win({
+                x: motion.accelerationIncludingGravity.x,
+                y: motion.accelerationIncludingGravity.y,
+                z: motion.accelerationIncludingGravity.z,
+                timestamp: motion.timestamp
+            });
+        };
+        window.addEventListener("devicemotion", callback);
+    },
+    stop: function (win, fail, args) {
+        window.removeEventListener("devicemotion", callback);
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\device.js
+define("cordova/plugin/firefoxos/device", function(require, exports, module) {
+
+var channel = require('cordova/channel'),
+    cordova = require('cordova');
+
+// Tell cordova channel to wait on the CordovaInfoReady event
+channel.waitForInitialization('onCordovaInfoReady');
+
+module.exports = {
+    getDeviceInfo : function(win, fail, args){
+        win({
+            platform: "Firefox OS",
+            version: "0.0.1",
+            model: "Beta Phone",
+            name: "Beta Phone", // deprecated: please use device.model
+            uuid: "somestring",
+            cordova: CORDOVA_JS_BUILD_LABEL
+        });
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\network.js
+define("cordova/plugin/firefoxos/network", function(require, exports, module) {
+
+var cordova = require('cordova');
+
+module.exports = {
+    getConnectionInfo: function (win, fail, args) {
+        win("3G");
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\notification.js
+define("cordova/plugin/firefoxos/notification", function(require, exports, module) {
+
+module.exports = {
+
+    vibrate: function(milliseconds) {
+        console.log ("milliseconds" , milliseconds);
+
+        if (navigator.vibrate) {
+            navigator.vibrate(milliseconds);
+        } else {
+            console.log ("cordova/plugin/firefoxos/notification, vibrate API does not exist");
+        }
+    }
+
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\orientation.js
+define("cordova/plugin/firefoxos/orientation", function(require, exports, module) {
+
+// user must have event listener registered for orientation to work
+// window.addEventListener("orientationchange", onorientationchange, true);
+
+module.exports = {
+
+    getCurrentOrientation: function() {
+          return window.screen.orientation;
+    }
+
+};
 
 });
 

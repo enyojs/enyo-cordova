@@ -11,7 +11,14 @@ Loads the cordova.js file for the current platform.
 			{platform: "webos"},
 			{platform: "windowsPhone", version: 8, cordovaFilename: "wp8"},
 			{platform: "windowsPhone", version: 7, cordovaFilename: "wp7"},
-			{platform: "blackberry"}
+			{platform: "blackberry", version: 10, cordovaFilename: "blackberry10"},
+			{platform: "blackberry"},
+			{platform: "firefoxOS"},
+			// TODO: Figure out how to detect desktop webapps vs in-browser
+			//{platform: "ie", version: 10, cordovaFilename: "windows8"},
+			//{platform: "safari", cordovaFilename: "osx"},
+			{platform: "tizen"}
+			
 		];
 		var platform;
 		if (window.PalmSystem) {
