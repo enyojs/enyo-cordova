@@ -1,5 +1,5 @@
-// Platform: webos
-// 2.7.0rc1-92-g10923cb
+﻿// Platform: windows8
+// 2.7.0rc1-128-gbab9173
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-92-g10923cb';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-128-gbab9173';
 // file: lib\scripts\require.js
 
 var require,
@@ -788,14 +788,17 @@ module.exports = {
 };
 });
 
-// file: lib\webos\exec.js
+// file: lib\windows8\exec.js
 define("cordova/exec", function(require, exports, module) {
+
+var cordova = require('cordova');
+var commandProxy = require('cordova/commandProxy');
 
 /**
  * Execute a cordova command.  It is up to the native side whether this action
  * is synchronous or asynchronous.  The native side can return:
  *      Synchronous: PluginResult object as a JSON string
- *      Asynchrounous: Empty string ""
+ *      Asynchronous: Empty string ""
  * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
  * depending upon the result of the action.
  *
@@ -805,27 +808,24 @@ define("cordova/exec", function(require, exports, module) {
  * @param {String} action       Action to be run in cordova
  * @param {String[]} [args]     Zero or more arguments to pass to the method
  */
-
-var plugins = {
-    "Device": require('cordova/plugin/webos/device'),
-    "NetworkStatus": require('cordova/plugin/webos/network'),
-    "Compass": require('cordova/plugin/webos/compass'),
-    "Camera": require('cordova/plugin/webos/camera'),
-    "Accelerometer" : require('cordova/plugin/webos/accelerometer'),
-    "Notification" : require('cordova/plugin/webos/notification'),
-    "Geolocation": require('cordova/plugin/webos/geolocation')
-};
-
 module.exports = function(success, fail, service, action, args) {
-    try {
-        console.error("exec:call plugin:"+service+":"+action);
-        plugins[service][action](success, fail, args);
+
+    var proxy = commandProxy.get(service,action);
+    if(proxy) {
+        var callbackId = service + cordova.callbackId++;
+        // console.log("EXEC:" + service + " : " + action);
+        if (typeof success == "function" || typeof fail == "function") {
+            cordova.callbacks[callbackId] = {success:success, fail:fail};
+        }
+        try {
+            proxy(success, fail, args);
+        }
+        catch(e) {
+            console.log("Exception calling native with command :: " + service + " :: " + action  + " ::exception=" + e);
+        }
     }
-    catch(e) {
-        console.error("missing exec: " + service + "." + action);
-        console.error(args);
-        console.error(e);
-        console.error(e.stack);
+    else {
+        fail && fail("Missing Command Error");
     }
 };
 
@@ -932,149 +932,58 @@ exports.reset();
 
 });
 
-// file: lib\webos\platform.js
+// file: lib\windows8\platform.js
 define("cordova/platform", function(require, exports, module) {
 
-/*global Mojo:false */
+var cordova = require('cordova'),
+    exec = require('cordova/exec'),
+    channel = cordova.require("cordova/channel"),
+    modulemapper = require('cordova/modulemapper');
 
-var service=require('cordova/plugin/webos/service'),
-    cordova = require('cordova');
+/*
+ * Define native implementations ( there is no native layer, so need to make sure the proxies are there )
+ */
+modulemapper.loadMatchingModules(/cordova.*\/windows8\/.*Proxy$/);
 
 module.exports = {
-    id: "webos",
-    initialize: function() {
-        var modulemapper = require('cordova/modulemapper');
+    id: "windows8",
+    initialize:function() {
+
+        modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
 
         modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
-
-        modulemapper.merges('cordova/plugin/webos/service', 'navigator.service');
-        modulemapper.merges('cordova/plugin/webos/application', 'navigator.application');
-        modulemapper.merges('cordova/plugin/webos/window', 'navigator.window');
-        modulemapper.merges('cordova/plugin/webos/orientation', 'navigator.orientation');
-        modulemapper.merges('cordova/plugin/webos/keyboard', 'navigator.keyboard');
-        modulemapper.merges('cordova/plugin/webos/pmloglib', 'window.webOS');
+        modulemapper.clobbers('cordova/commandProxy', 'cordova.commandProxy');
 
         modulemapper.mapModules(window);
 
-        if (window.PalmSystem) {
-            window.PalmSystem.stageReady();
+        var onWinJSReady = function () {
+            var app = WinJS.Application;
+            var checkpointHandler = function checkpointHandler() {
+                cordova.fireDocumentEvent('pause');
+            };
+
+            var resumingHandler = function resumingHandler() {
+                cordova.fireDocumentEvent('resume');
+            };
+
+            app.addEventListener("checkpoint", checkpointHandler);
+            Windows.UI.WebUI.WebUIApplication.addEventListener("resuming", resumingHandler, false);
+            app.start();
+
+        };
+
+        if (!window.WinJS) {
+            // <script src="//Microsoft.WinJS.1.0/js/base.js"></script>
+            var scriptElem = document.createElement("script");
+            scriptElem.src = "//Microsoft.WinJS.1.0/js/base.js";
+            scriptElem.addEventListener("load", onWinJSReady);
+            document.head.appendChild(scriptElem);
+
+            console.log("added WinJS ... ");
         }
-
-        // create global Mojo object if it does not exist
-        Mojo = window.Mojo || {};
-
-        //connection monitor subscription
-        navigator.connectionMonitor = navigator.connectionMonitor || {};
-        navigator.connectionMonitor.start = function() {
-            navigator.connectionMonitor.request = service.Request('palm://com.palm.connectionmanager', {
-                method: 'getstatus',
-                parameters: { subscribe: true },
-                onSuccess: function (result) {
-                    console.log("subscribe:result:"+JSON.stringify(result));
-                    if(!result.isInternetConnectionAvailable) {
-                        if (navigator.onLine) {
-                            console.log("Firing event:offline");
-                            cordova.fireDocumentEvent("offline");
-                        }
-                    } else {
-                        console.log("Firing event:online");
-                        cordova.fireDocumentEvent("online");
-                    }
-                },
-                onFailure: function(e) {
-                    console.error("subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: true
-            });
-        };
-        navigator.connectionMonitor.start();
-
-        //locale monitor subscription
-        navigator.localeMonitor = navigator.localeMonitor || {};
-        navigator.localeMonitor.start = function() {
-            navigator.localeMonitor.request = service.Request('palm://com.palm.systemservice', {
-                method: 'getPreferences',
-                parameters: {
-                    keys: ["localeInfo"],
-                },
-                onSuccess: function (inResponse) {
-                    if(navigator.localeInfo) {
-                        if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
-                                (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
-                                (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
-                            console.log("Firing event:localechange");
-                            cordova.fireDocumentEvent("localechange");
-                        }
-                    }
-                    navigator.localeInfo = inResponse.localeInfo;
-                },
-                onFailure: function(e) {
-                    console.error("subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: true
-            });
-        };
-        navigator.localeMonitor.start();
-
-        // wait for deviceready before listening and firing document events
-        document.addEventListener("deviceready", function () {
-
-            // LunaSysMgr calls this when the windows is maximized or opened.
-            window.Mojo.stageActivated = function() {
-                console.log("stageActivated");
-                cordova.fireDocumentEvent("resume");
-                // start to listen for network connection changes if needed
-                if(!navigator.connectionMonitor.request) {
-                    navigator.connectionMonitor.start();
-                }
-
-                // start to listen for locale info changes if needed
-                if(!navigator.localeMonitor.request) {
-                    navigator.localeMonitor.start();
-                }
-            };
-            // LunaSysMgr calls this when the windows is minimized or closed.
-            window.Mojo.stageDeactivated = function() {
-                console.log("stageDeactivated");
-                cordova.fireDocumentEvent("pause");
-                // stop subscription-based monitors on stage deactivation
-                if(navigator.connectionMonitor.request) {
-                    navigator.connectionMonitor.request.cancel();
-                    navigator.connectionMonitor.request = undefined;
-                }
-                if(navigator.localeMonitor.request) {
-                    navigator.localeMonitor.request.cancel();
-                    navigator.localeMonitor.request = undefined;
-                }
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is hidden
-            window.Mojo.hide = function() {
-                console.log("hide");
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is shown
-            window.Mojo.show = function() {
-                console.log("show");
-            };
-
-            // LunaSysMgr calls this whenever an app is "launched;"
-            window.Mojo.relaunch = function() {
-                // need to return true to tell sysmgr the relaunch succeeded.
-                // otherwise, it'll try to focus the app, which will focus the first
-                // opened window of an app with multiple windows.
-
-                var lp=JSON.parse(PalmSystem.launchParams) || {};
-
-                if (lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
-                    console.log("event:ToggleAppMenu");
-                    cordova.fireDocumentEvent("menubutton");
-                }
-
-                console.log("relaunch");
-                return true;
-            };
-        });
+        else {
+            onWinJSReady();
+        }
     }
 };
 
@@ -4051,7 +3960,7 @@ module.exports = new Capture();
 
 });
 
-// file: lib\common\plugin\capture\symbols.js
+// file: lib\windows8\plugin\capture\symbols.js
 define("cordova/plugin/capture/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -4060,10 +3969,11 @@ modulemapper.clobbers('cordova/plugin/CaptureError', 'CaptureError');
 modulemapper.clobbers('cordova/plugin/CaptureAudioOptions', 'CaptureAudioOptions');
 modulemapper.clobbers('cordova/plugin/CaptureImageOptions', 'CaptureImageOptions');
 modulemapper.clobbers('cordova/plugin/CaptureVideoOptions', 'CaptureVideoOptions');
-modulemapper.clobbers('cordova/plugin/ConfigurationData', 'ConfigurationData');
 modulemapper.clobbers('cordova/plugin/MediaFile', 'MediaFile');
 modulemapper.clobbers('cordova/plugin/MediaFileData', 'MediaFileData');
 modulemapper.clobbers('cordova/plugin/capture', 'navigator.device.capture');
+
+modulemapper.merges('cordova/plugin/windows8/MediaFile', 'MediaFile');
 
 });
 
@@ -4527,7 +4437,7 @@ module.exports = function(successCallback, errorCallback, message, forceAsync) {
 
 });
 
-// file: lib\webos\plugin\file\symbols.js
+// file: lib\windows8\plugin\file\symbols.js
 define("cordova/plugin/file/symbols", function(require, exports, module) {
 
 
@@ -4535,8 +4445,8 @@ var modulemapper = require('cordova/modulemapper'),
     symbolshelper = require('cordova/plugin/file/symbolshelper');
 
 symbolshelper(modulemapper.defaults);
-modulemapper.clobbers('cordova/plugin/webos/requestfilesystem', 'requestFileSystem');
-modulemapper.clobbers('cordova/plugin/webos/filereader', 'FileReader');
+modulemapper.clobbers('cordova/plugin/File', 'File');
+modulemapper.clobbers('cordova/plugin/FileReader', 'FileReader');
 
 });
 
@@ -5512,14 +5422,14 @@ modulemapper.clobbers('cordova/plugin/logger', 'cordova.logger');
 
 });
 
-// file: lib\common\plugin\media\symbols.js
+// file: lib\windows8\plugin\media\symbols.js
 define("cordova/plugin/media/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/Media', 'Media');
-modulemapper.defaults('cordova/plugin/MediaError', 'MediaError');
+modulemapper.clobbers('cordova/plugin/MediaError', 'MediaError');
 
 });
 
@@ -5710,14 +5620,13 @@ module.exports = {
 
 });
 
-// file: lib\webos\plugin\notification\symbols.js
+// file: lib\common\plugin\notification\symbols.js
 define("cordova/plugin/notification/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/notification', 'navigator.notification');
-modulemapper.merges('cordova/plugin/webos/notification', 'navigator.notification');
 
 });
 
@@ -5844,919 +5753,2022 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 
 });
 
-// file: lib\webos\plugin\webos\accelerometer.js
-define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
+// file: lib\windows8\plugin\windows8\AccelerometerProxy.js
+define("cordova/plugin/windows8/AccelerometerProxy", function(require, exports, module) {
 
-var callback;
-module.exports = {
-    /*
-     * Tells WebOS to put higher priority on accelerometer resolution. Also relaxes the internal garbage collection events.
-     * @param {Boolean} state
-     * Dependencies: Mojo.windowProperties
-     * Example:
-     *         navigator.accelerometer.setFastAccelerometer(true)
-     */
-    setFastAccelerometer: function(state) {
-        navigator.windowProperties.fastAccelerometer = state;
-        navigator.window.setWindowProperties();
-    },
+/*global Windows:true */
 
-    /*
-     * Starts the native acceleration listener.
-     */
-    start: function(win,fail,args) {
-        console.error("webos plugin accelerometer start");
-        window.removeEventListener("acceleration", callback);
-        callback = function(event) {
-            var accel = new Acceleration(event.accelX*-9.81, event.accelY*-9.81, event.accelZ*-9.81);
-            win(accel);
-        };
-        document.addEventListener("acceleration", callback);
-    },
-    stop: function (win,fail,args) {
-        console.error("webos plugin accelerometer stop");
-        window.removeEventListener("acceleration", callback);
-    }
-};
+var cordova = require('cordova'),
+    Acceleration = require('cordova/plugin/Acceleration');
 
-});
-
-// file: lib\webos\plugin\webos\application.js
-define("cordova/plugin/webos/application", function(require, exports, module) {
+/* This is the actual implementation part that returns the result on Windows 8
+*/
 
 module.exports = {
-    isActivated: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            return inWindow.PalmSystem.isActivated;
+    onDataChanged:null,
+    start:function(win,lose){
+
+        var accel = Windows.Devices.Sensors.Accelerometer.getDefault();
+        if(!accel) {
+            lose && lose("No accelerometer found");
         }
-        return false;
-    },
+        else {
+            var self = this;
+            accel.reportInterval = Math.max(16,accel.minimumReportInterval);
 
-    /*
-     * Tell webOS to activate the current page of your app, bringing it into focus.
-     * Example:
-     *         navigator.application.activate();
-     */
-    activate: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.activate();
-        }
-    },
-
-    /*
-     * Tell webOS to deactivate your app.
-     * Example:
-     *        navigator.application.deactivate();
-     */
-    deactivate: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.deactivate();
-        }
-    },
-
-    /*
-     * Returns the identifier of the current running application (e.g. com.yourdomain.yourapp).
-     * Example:
-     *        navigator.application.getIdentifier();
-     */
-    getIdentifier: function() {
-        return PalmSystem.identifier;
-    },
-
-    fetchAppId: function() {
-        if (window.PalmSystem) {
-            // PalmSystem.identifier: <appid> <processid>
-            return PalmSystem.identifier.split(" ")[0];
-        }
-    },
-    fetchAppInfo: function() {
-        if(!this.appInfo) {
-            var appInfoPath = this.fetchAppRootPath() + "appinfo.json";
-            var appInfoJSON = undefined;
-            if(window.palmGetResource) {
-                try {
-                    appInfoJSON = palmGetResource(appInfoPath);
-                } catch(e) {
-                    console.log("error reading appinfo.json" + e.message);
-                }
-            } else {
-                var req = new XMLHttpRequest();
-                req.open('GET', appInfoPath + "?palmGetResource=true", false);
-                req.send(null);
-                if(req.status >= 200 && req.status < 300) {
-                    appInfoJSON = req.responseText;
-                } else {
-                    console.log("error reading appinfo.json");
-                }
-            }
-            if(appInfoJSON) {
-                this.appInfo = enyo.json.parse(appInfoJSON);
-            }
-        }
-        return this.appInfo;
-    },
-    fetchAppRootPath: function() {
-        var base = window.location.href;
-        if('baseURI' in window.document) {
-            base = window.document.baseURI;
-        } else {
-            var baseTags = window.document.getElementsByTagName("base");
-            if(baseTags.length > 0) {
-                base = baseTags[0].href;
-            }
-        }
-        var match = base.match(new RegExp(".*:\/\/[^#]*\/"));
-        if(match) {
-            return match[0];
-        }
-        return "";
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\camera.js
-define("cordova/plugin/webos/camera", function(require, exports, module) {
-
-var service = require('cordova/plugin/webos/service');
-
-module.exports = {
-    takePicture: function(successCallback, errorCallback, options) {
-        var filename = (options || {}).filename | "";
-
-        service.Request('palm://com.palm.applicationManager', {
-            method: 'launch',
-            parameters: {
-            id: 'com.palm.app.camera',
-            params: {
-                    appId: 'com.palm.app.camera',
-                    name: 'capture',
-                    sublaunch: true,
-                    filename: filename
-                }
-            },
-            onSuccess: successCallback,
-            onFailure: errorCallback
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\compass.js
-define("cordova/plugin/webos/compass", function(require, exports, module) {
-
-var CompassHeading = require('cordova/plugin/CompassHeading'),
-    CompassError = require('cordova/plugin/CompassError');
-
-module.exports = {
-    getCurrentHeading: function(onSuccess, onError) {
-        // only TouchPad and Pre3 have a Compass/Gyro
-        if (window.device.name !== "TouchPad" && window.device.name !== "Prē3") {
-            onError({code: CompassError.COMPASS_NOT_SUPPORTED});
-        } else {
-            console.log("webos plugin compass getheading");
-            var onReadingChanged = function (e) {
-                var heading = new CompassHeading(e.magHeading, e.trueHeading);
-                document.removeEventListener("compass", onReadingChanged);
-                onSuccess(heading);
+            // store our bound function
+            this.onDataChanged = function(e) {
+                var a = e.reading;
+                win(new Acceleration(a.accelerationX,a.accelerationY,a.accelerationZ));
             };
-            document.addEventListener("compass", onReadingChanged);
+            accel.addEventListener("readingchanged",this.onDataChanged);
+
+            setTimeout(function(){
+                var a = accel.getCurrentReading();
+                win(new Acceleration(a.accelerationX,a.accelerationY,a.accelerationZ));
+            },0); // async do later
+        }
+    },
+    stop:function(win,lose){
+        win = win || function(){};
+        var accel = Windows.Devices.Sensors.Accelerometer.getDefault();
+        if(!accel) {
+            lose && lose("No accelerometer found");
+        }
+        else {
+            accel.removeEventListener("readingchanged",this.onDataChanged);
+            this.onDataChanged = null;
+            accel.reportInterval = 0; // back to the default
+            win();
         }
     }
 };
 
+require("cordova/commandProxy").add("Accelerometer",module.exports);
 });
 
-// file: lib\webos\plugin\webos\device.js
-define("cordova/plugin/webos/device", function(require, exports, module) {
+// file: lib\windows8\plugin\windows8\CameraProxy.js
+define("cordova/plugin/windows8/CameraProxy", function(require, exports, module) {
 
-var service = require('cordova/plugin/webos/service');
+/*global Windows:true, URL:true */
+
+
+var cordova = require('cordova'),
+    Camera = require('cordova/plugin/CameraConstants'),
+    FileEntry = require('cordova/plugin/FileEntry'),
+    FileError = require('cordova/plugin/FileError'),
+    FileReader = require('cordova/plugin/FileReader');
 
 module.exports = {
-    getDeviceInfo: function(successCallback, failureCallback) {
-        var deviceInfo = undefined;
-        try {
-            deviceInfo = JSON.parse(PalmSystem.deviceInfo);
-        } catch(e) {
-            failureCallback(e)
-        }
-        service.Request('palm://com.palm.preferences/systemProperties', {
-            method:"Get",
-            parameters:{"key": "com.palm.properties.nduid"},
-            onSuccess: function(result) {
-                successCallback({
-                    name: deviceInfo.modelName,
-                    model: deviceInfo.modelName,
-                    version: deviceInfo.platformVersion,
-                    platform: "webOS",
-                    cordova: "2.7.0",
-                    uuid: result["com.palm.properties.nduid"]
-                });
-            },
-            onFailure: function(err) {
-                successCallback({
-                    name: deviceInfo.modelName,
-                    model: deviceInfo.modelName,
-                    version: deviceInfo.platformVersion,
-                    platform: "webOS",
-                    cordova: "2.7.0",
-                    uuid: ""
-                });
-            }
-        });
-    }
-};
 
-});
+    // args will contain :
+    //  ...  it is an array, so be careful
+    // 0 quality:50,
+    // 1 destinationType:Camera.DestinationType.FILE_URI,
+    // 2 sourceType:Camera.PictureSourceType.CAMERA,
+    // 3 targetWidth:-1,
+    // 4 targetHeight:-1,
+    // 5 encodingType:Camera.EncodingType.JPEG,
+    // 6 mediaType:Camera.MediaType.PICTURE,
+    // 7 allowEdit:false,
+    // 8 correctOrientation:false,
+    // 9 saveToPhotoAlbum:false,
+    // 10 popoverOptions:null
 
-// file: lib\webos\plugin\webos\file.js
-define("cordova/plugin/webos/file", function(require, exports, module) {
+    takePicture: function (successCallback, errorCallback, args) {
+        var encodingType = args[5];
+        var targetWidth = args[3];
+        var targetHeight = args[4];
+        var sourceType = args[2];
+        var destinationType = args[1];
+        var mediaType = args[6];
+        var saveToPhotoAlbum = args[9];
 
-/**
- * Constructor.
- * name {DOMString} name of the file, without path information
- * fullPath {DOMString} the full path of the file, including the name
- * type {DOMString} mime type
- * lastModifiedDate {Date} last modified date
- * size {Number} size of the file in bytes
- */
+        var pkg = Windows.ApplicationModel.Package.current;
+        var packageId = pkg.installedLocation;
 
-var File = function(name, fullPath, type, lastModifiedDate, size){
-    this.name = name || '';
-    this.fullPath = fullPath || null;
-    this.type = type || null;
-    this.lastModifiedDate = lastModifiedDate || null;
-    this.size = size || 0;
-};
+        var fail = function (fileError) {
+            errorCallback("FileError, code:" + fileError.code);
+        };
 
-module.exports = File;
-
-});
-
-// file: lib\webos\plugin\webos\filereader.js
-define("cordova/plugin/webos/filereader", function(require, exports, module) {
-
-var FileError = require('cordova/plugin/FileError'),
-    ProgressEvent = require('cordova/plugin/ProgressEvent');
-
-var FileReader = function() {
-    this.fileName = "";
-
-    this.readyState = 0; // FileReader.EMPTY
-
-    // File data
-    this.result = null;
-
-    // Error
-    this.error = null;
-
-    // Event handlers
-    this.onloadstart = null;    // When the read starts.
-    this.onprogress = null;     // While reading (and decoding) file or fileBlob data, and reporting partial file data (progess.loaded/progress.total)
-    this.onload = null;         // When the read has successfully completed.
-    this.onerror = null;        // When the read has failed (see errors).
-    this.onloadend = null;      // When the request has completed (either in success or failure).
-    this.onabort = null;        // When the read has been aborted. For instance, by invoking the abort() method.
-};
-
-FileReader.prototype.readAsText = function(file, encoding) {
-    console.error("webos plugin filereader readastext:" + file);
-    //Mojo has no file i/o yet, so we use an xhr. very limited
-
-    // Already loading something
-    if (this.readyState == FileReader.LOADING) {
-        throw new FileError(FileError.INVALID_STATE_ERR);
-    }
-
-    // LOADING state
-    this.readyState = FileReader.LOADING;
-
-    // If loadstart callback
-    if (typeof this.onloadstart === "function") {
-        this.onloadstart(new ProgressEvent("loadstart", {target:this}));
-    }
-
-    // Default encoding is UTF-8
-    var enc = encoding ? encoding : "UTF-8";
-
-    var me = this;
-
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-        console.error("onreadystatechange:"+xhr.readyState+" "+xhr.status);
-        if (xhr.readyState == 4) {
-            if (xhr.status == 200 && xhr.responseText) {
-                console.error("file read completed");
-                // Save result
-                me.result = xhr.responseText;
-
-                // If onload callback
-                if (typeof me.onload === "function") {
-                    me.onload(new ProgressEvent("load", {target:me}));
-                }
-
-                // DONE state
-                me.readyState = FileReader.DONE;
-
-                // If onloadend callback
-                if (typeof me.onloadend === "function") {
-                    me.onloadend(new ProgressEvent("loadend", {target:me}));
-                }
-
+        // resize method :)
+        var resizeImage = function (file) {
+            var tempPhotoFileName = "";
+            if (encodingType == Camera.EncodingType.PNG) {
+                tempPhotoFileName = "camera_cordova_temp_return.png";
             } else {
-                // If DONE (cancelled), then don't do anything
-                if (me.readyState === FileReader.DONE) {
-                    return;
-                }
-
-                // DONE state
-                me.readyState = FileReader.DONE;
-
-                me.result = null;
-
-                // Save error
-                me.error = new FileError(FileError.NOT_FOUND_ERR);
-
-                // If onerror callback
-                if (typeof me.onerror === "function") {
-                    me.onerror(new ProgressEvent("error", {target:me}));
-                }
-
-                // If onloadend callback
-                if (typeof me.onloadend === "function") {
-                    me.onloadend(new ProgressEvent("loadend", {target:me}));
-                }
+                tempPhotoFileName = "camera_cordova_temp_return.jpg";
             }
-        }
-    };
-    xhr.open("GET", file, true);
-    xhr.send();
-};
+            var imgObj = new Image();
+            var success = function (fileEntry) {
+                var successCB = function (filePhoto) {
+                    var fileType = file.contentType,
+                        reader = new FileReader();
+                    reader.onloadend = function () {
+                        var image = new Image();
+                        image.src = reader.result;
+                        image.onload = function () {
+                            var imageWidth = targetWidth,
+                                imageHeight = targetHeight;
+                            var canvas = document.createElement('canvas');
 
-module.exports = FileReader;
+                            canvas.width = imageWidth;
+                            canvas.height = imageHeight;
 
-});
+                            var ctx = canvas.getContext("2d");
+                            ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
 
-// file: lib\webos\plugin\webos\geolocation.js
-define("cordova/plugin/webos/geolocation", function(require, exports, module) {
+                            // The resized file ready for upload
+                            var _blob = canvas.msToBlob();
+                            var _stream = _blob.msDetachStream();
+                            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                                storageFolder.createFileAsync(tempPhotoFileName, Windows.Storage.CreationCollisionOption.generateUniqueName).done(function (file) {
+                                    file.openAsync(Windows.Storage.FileAccessMode.readWrite).done(function (fileStream) {
+                                        Windows.Storage.Streams.RandomAccessStream.copyAndCloseAsync(_stream, fileStream).done(function () {
+                                            var _imageUrl = URL.createObjectURL(file);
+                                            successCallback(_imageUrl);
+                                        }, function () { errorCallback("Resize picture error."); });
+                                    }, function () { errorCallback("Resize picture error."); });
+                                }, function () { errorCallback("Resize picture error."); });
+                            });
+                        };
+                    };
 
-var service = require('cordova/plugin/webos/service');
-
-module.exports = {
-    getLocation: function(successCallback, errorCallback, options) {
-        console.error("webos plugin geolocation getlocation");
-        var request = service.Request('palm://com.palm.location', {
-            method: "getCurrentPosition",
-            onSuccess: function(event) {
-                var alias={};
-                alias.lastPosition = {
-                    coords: {
-                        latitude: event.latitude,
-                        longitude: event.longitude,
-                        altitude: (event.altitude >= 0 ? event.altitude: null),
-                        speed: (event.velocity >= 0 ? event.velocity: null),
-                        heading: (event.heading >= 0 ? event.heading: null),
-                        accuracy: (event.horizAccuracy >= 0 ? event.horizAccuracy: null),
-                        altitudeAccuracy: (event.vertAccuracy >= 0 ? event.vertAccuracy: null)
-                    },
-                    timestamp: new Date().getTime()
+                    reader.readAsDataURL(filePhoto);
                 };
 
-                successCallback(alias.lastPosition);
-            },
-            onFailure: function() {
-                errorCallback();
-            }
-        });
-    }
-};
+                var failCB = function () {
+                    errorCallback("File not found.");
+                };
+                fileEntry.file(successCB, failCB);
+            };
 
-});
+            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
+                    success(new FileEntry(storageFile.name, storageFile.path));
+                }, function () {
+                    fail(FileError.INVALID_MODIFICATION_ERR);
+                }, function () {
+                    errorCallback("Folder not access.");
+                });
+            });
 
-// file: lib\webos\plugin\webos\keyboard.js
-define("cordova/plugin/webos/keyboard", function(require, exports, module) {
-
-var _isShowing = null,
-    _manual = null;
-
-module.exports = {
-    types: {
-        text: 0,
-        password: 1,
-        search: 2,
-        range: 3,
-        email: 4,
-        number: 5,
-        phone: 6,
-        url: 7,
-        color: 8
-    },
-    isShowing: function() {
-        return !!_isShowing;
-    },
-    show: function(type){
-        if(this.isManualMode()) {
-            PalmSystem.keyboardShow(type || 0);
-        }
-    },
-    hide: function(){
-        if(this.isManualMode()) {
-            PalmSystem.keyboardHide();
-        }
-    },
-    setManualMode: function(mode){
-        _manual = mode;
-        PalmSystem.setManualKeyboardEnabled(mode);
-    },
-    isManualMode: function(){
-        return _manual || false;
-    },
-    forceShow: function(inType){
-        this.setManualMode(true);
-        PalmSystem.keyboardShow(inType || 0);
-    },
-    forceHide: function(){
-        this.setManualMode(true);
-        PalmSystem.keyboardHide();
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\network.js
-define("cordova/plugin/webos/network", function(require, exports, module) {
-
-var service=require('cordova/plugin/webos/service'),
-    Connection = require('cordova/plugin/Connection');
-
-module.exports = {
-    /**
-     * Get connection info
-     *
-     * @param {Function} successCallback The function to call when the Connection data is available
-     * @param {Function} errorCallback The function to call when there is an error getting the Connection data. (OPTIONAL)
-     */
-    getConnectionInfo: function (successCallback, errorCallback) {
-        // Get info
-        console.log("webos Plugin: NetworkStatus - getConnectionInfo");
-
-        service.Request('palm://com.palm.connectionmanager', {
-            method: 'getstatus',
-            parameters: {},
-            onSuccess: function (result) {
-                console.log("result:"+JSON.stringify(result));
-
-                var info={};
-                if (!result.isInternetConnectionAvailable) { info.type=Connection.NONE; }
-                if (result.wifi && result.wifi.onInternet) { info.type=Connection.WIFI; }
-                if (result.wired && result.wired.onInternet) { info.type=Connection.ETHERNET; }
-                if (result.wan && result.wan.state==="connected") { info.type=Connection.CELL_2G; }
-
-                successCallback(info.type);
-            },
-            onFailure: errorCallback
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\notification.js
-define("cordova/plugin/webos/notification", function(require, exports, module) {
-
-module.exports = {
-    /*
-     * adds a dashboard to the WebOS app
-     * @param {String} url
-     * @param {String} html
-     * Example:
-     *        navigator.notification.newDashboard("dashboard.html");
-     */
-    newDashboard: function(url, html) {
-        var win = window.open(url, "_blank", "attributes={\"window\":\"dashboard\"}");
-        html && win.document.write(html);
-        win.PalmSystem.stageReady();
-    },
-
-    /*
-     * Displays a banner notification. If specified, will send your 'response' object as data via the 'palmsystem' DOM event.
-     * If no 'icon' filename is specified, will use a small version of your application icon.
-     * @param {String} message
-     * @param {Object} response
-     * @param {String} icon
-     * @param {String} soundClass class of the sound; supported classes are: "ringtones", "alerts", "alarm", "calendar", "notification"
-     * @param {String} soundFile partial or full path to the sound file
-     * @param {String} soundDurationMs of sound in ms
-     * Example:
-     *        navigator.notification.showBanner('test message');
-     */
-    showBanner: function(message, response, icon, soundClass, soundFile, soundDurationMs) {
-        response = response || {
-            banner: true
         };
-        PalmSystem.addBannerMessage(message, JSON.stringify(response), icon, soundClass, soundFile, soundDurationMs);
-    },
 
-    /**
-     * Remove a banner from the banner area. The category parameter defaults to 'banner'. Will not remove
-     * messages that are already displayed.
-     * @param {String} category
-            Value defined by the application and usually same one used in {@link showBanner}.
-            It is used if you have more than one kind of banner message.
-     */
-    removeBannerMessage: function(category) {
-        var bannerKey = category || 'banner';
-        var bannerId = this.banners.get(bannerKey);
-        if (bannerId) {
-            try {
-                PalmSystem.removeBannerMessage(bannerId);
-            } catch(removeBannerException) {
-                window.debug.error(removeBannerException.toString());
+        // because of asynchronous method, so let the successCallback be called in it.
+        var resizeImageBase64 = function (file) {
+            var imgObj = new Image();
+            var success = function (fileEntry) {
+                var successCB = function (filePhoto) {
+                    var fileType = file.contentType,
+                        reader = new FileReader();
+                    reader.onloadend = function () {
+                        var image = new Image();
+                        image.src = reader.result;
+
+                        image.onload = function () {
+                            var imageWidth = targetWidth,
+                                imageHeight = targetHeight;
+                            var canvas = document.createElement('canvas');
+
+                            canvas.width = imageWidth;
+                            canvas.height = imageHeight;
+
+                            var ctx = canvas.getContext("2d");
+                            ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
+
+                            // The resized file ready for upload
+                            var finalFile = canvas.toDataURL(fileType);
+
+                            // Remove the prefix such as "data:" + contentType + ";base64," , in order to meet the Cordova API.
+                            var arr = finalFile.split(",");
+                            var newStr = finalFile.substr(arr[0].length + 1);
+                            successCallback(newStr);
+                        };
+                    };
+
+                    reader.readAsDataURL(filePhoto);
+
+                };
+                var failCB = function () {
+                    errorCallback("File not found.");
+                };
+                fileEntry.file(successCB, failCB);
+            };
+
+            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
+                    success(new FileEntry(storageFile.name, storageFile.path));
+                }, function () {
+                    fail(FileError.INVALID_MODIFICATION_ERR);
+                }, function () {
+                    errorCallback("Folder not access.");
+                });
+            });
+
+        };
+
+        if (sourceType != Camera.PictureSourceType.CAMERA) {
+            var fileOpenPicker = new Windows.Storage.Pickers.FileOpenPicker();
+            fileOpenPicker.suggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.picturesLibrary;
+            if (mediaType == Camera.MediaType.PICTURE) {
+                fileOpenPicker.fileTypeFilter.replaceAll([".png", ".jpg", ".jpeg"]);
+            } else if (mediaType == Camera.MediaType.VIDEO) {
+                fileOpenPicker.fileTypeFilter.replaceAll([".avi", ".flv", ".asx", ".asf", ".mov", ".mp4", ".mpg", ".rm", ".srt", ".swf", ".wmv", ".vob"]);
+            } else {
+                fileOpenPicker.fileTypeFilter.replaceAll(["*"]);
             }
+
+            fileOpenPicker.pickSingleFileAsync().then(function (file) {
+                if (file) {
+                    if (destinationType == Camera.DestinationType.FILE_URI) {
+                        if (targetHeight > 0 && targetWidth > 0) {
+                            resizeImage(file);
+                        } else {
+                            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
+                                    var _imageUrl = URL.createObjectURL(storageFile);
+                                    successCallback(_imageUrl);
+                                }, function () {
+                                    fail(FileError.INVALID_MODIFICATION_ERR);
+                                }, function () {
+                                    errorCallback("Folder not access.");
+                                });
+                            });
+
+                        }
+                    }
+                    else {
+                        if (targetHeight > 0 && targetWidth > 0) {
+                            resizeImageBase64(file);
+                        } else {
+                            Windows.Storage.FileIO.readBufferAsync(file).done(function (buffer) {
+                                var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
+                                successCallback(strBase64);
+                            });
+                        }
+
+                    }
+
+                } else {
+                    errorCallback("User didn't choose a file.");
+                }
+            }, function () {
+                errorCallback("User didn't choose a file.");
+            });
         }
-    },
+        else {
 
-    /*
-     * Remove all pending banner messages from the banner area. Will not remove messages that are already displayed.
-     */
-    clearBannerMessage: function() {
-        PalmSystem.clearBannerMessage();
-    },
-
-    /*
-     * This function vibrates the device
-     * @param {number} duration The duration in ms to vibrate for.
-     * @param {number} intensity The intensity of the vibration
-     */
-    vibrate_private: function(duration, intensity) {
-        //the intensity for palm is inverted; 0=high intensity, 100=low intensity
-        //this is opposite from our api, so we invert
-        if (isNaN(intensity) || intensity > 100 || intensity <= 0)
-        intensity = 0;
-        else
-        intensity = 100 - intensity;
-
-        // if the app id does not have the namespace "com.palm.", an error will be thrown here
-        //this.vibhandle = new Mojo.Service.Request("palm://com.palm.vibrate", {
-        this.vibhandle = navigator.service.Request("palm://com.palm.vibrate", {
-            method: 'vibrate',
-            parameters: {
-                'period': intensity,
-                'duration': duration
+            var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
+            cameraCaptureUI.photoSettings.allowCropping = true;
+            var allowCrop = !!args[7];
+            if (!allowCrop) {
+                cameraCaptureUI.photoSettings.allowCropping = false;
             }
-        },
-        false);
-    },
 
-    vibrate: function(param) {
-        PalmSystem.playSoundNotification('vibrate');
-    },
-    /*
-     * Plays the specified sound
-     * @param {String} soundClass class of the sound; supported classes are: "ringtones", "alerts", "alarm", "calendar", "notification"
-     * @param {String} soundFile partial or full path to the sound file
-     * @param {String} soundDurationMs of sound in ms
-     */
-    beep: function(param) {
-        PalmSystem.playSoundNotification('alerts');
-    },
+            if (encodingType == Camera.EncodingType.PNG) {
+                cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.png;
+            } else {
+                cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.jpeg;
+            }
+            // decide which max pixels should be supported by targetWidth or targetHeight.
+            if (targetWidth >= 1280 || targetHeight >= 960) {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.large3M;
+            } else if (targetWidth >= 1024 || targetHeight >= 768) {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.mediumXga;
+            } else if (targetWidth >= 800 || targetHeight >= 600) {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.mediumXga;
+            } else if (targetWidth >= 640 || targetHeight >= 480) {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.smallVga;
+            } else if (targetWidth >= 320 || targetHeight >= 240) {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.verySmallQvga;
+            } else {
+                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.highestAvailable;
+            }
 
-    getRootWindow: function() {
-        var w = window.opener || window.rootWindow || window.top || window;
-        if(!w.setTimeout) { // use this window as the root if we don't have access to the real root.
-            w = window;
+            cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.photo).then(function (picture) {
+                if (picture) {
+                    // save to photo album successCallback
+                    var success = function (fileEntry) {
+                        if (destinationType == Camera.DestinationType.FILE_URI) {
+                            if (targetHeight > 0 && targetWidth > 0) {
+                                resizeImage(picture);
+                            } else {
+                                Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                                    picture.copyAsync(storageFolder, picture.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
+                                        var _imageUrl = URL.createObjectURL(storageFile);
+                                        successCallback(_imageUrl);
+                                    }, function () {
+                                        fail(FileError.INVALID_MODIFICATION_ERR);
+                                    }, function () {
+                                        errorCallback("Folder not access.");
+                                    });
+                                });
+                            }
+                        } else {
+                            if (targetHeight > 0 && targetWidth > 0) {
+                                resizeImageBase64(picture);
+                            } else {
+                                Windows.Storage.FileIO.readBufferAsync(picture).done(function (buffer) {
+                                    var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
+                                    successCallback(strBase64);
+                                });
+                            }
+                        }
+                    };
+                    // save to photo album errorCallback
+                    var fail = function () {
+                        //errorCallback("FileError, code:" + fileError.code);
+                        errorCallback("Save fail.");
+                    };
+
+                    if (saveToPhotoAlbum) {
+                        Windows.Storage.StorageFile.getFileFromPathAsync(picture.path).then(function (storageFile) {
+                            storageFile.copyAsync(Windows.Storage.KnownFolders.picturesLibrary, picture.name, Windows.Storage.NameCollisionOption.generateUniqueName).then(function (storageFile) {
+                                success(storageFile);
+                            }, function () {
+                                fail();
+                            });
+                        });
+                        //var directory = new DirectoryEntry("Pictures", parentPath);
+                        //new FileEntry(picture.name, picture.path).copyTo(directory, null, success, fail);
+                    } else {
+                        if (destinationType == Camera.DestinationType.FILE_URI) {
+                            if (targetHeight > 0 && targetWidth > 0) {
+                                resizeImage(picture);
+                            } else {
+                                Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
+                                    picture.copyAsync(storageFolder, picture.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
+                                        var _imageUrl = URL.createObjectURL(storageFile);
+                                        successCallback(_imageUrl);
+                                    }, function () {
+                                        fail(FileError.INVALID_MODIFICATION_ERR);
+                                    }, function () {
+                                        errorCallback("Folder not access.");
+                                    });
+                                });
+                            }
+                        } else {
+                            if (targetHeight > 0 && targetWidth > 0) {
+                                resizeImageBase64(picture);
+                            } else {
+                                Windows.Storage.FileIO.readBufferAsync(picture).done(function (buffer) {
+                                    var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
+                                    successCallback(strBase64);
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    errorCallback("User didn't capture a photo.");
+                }
+            }, function () {
+                errorCallback("Fail to capture a photo.");
+            });
         }
-        return w;
-    },
-
-    open: function(inOpener, inUrl, inName, inAttributes, inWindowInfo) {
-        var url = inUrl;
-        var a = inAttributes && JSON.stringify(inAttributes);
-        a = "attributes=" + a;
-        var i = inWindowInfo ? inWindowInfo + ", " : "";
-        return inOpener.open(url, inName, i + a);
-    },
-
-    openWindow: function(inUrl, inName, inParams, inAttributes, inWindowInfo) {
-        //var attributes = inAttributes || {};
-        //attributes.window = attributes.window || "card";
-        // NOTE: make the root window open all windows.
-        return this.open(this.getRootWindow(), inUrl, inName || "", inAttributes, inWindowInfo);
-    },
-
-    alert: function(message,callback,title,buttonName) {
-        var inAttributes = {};
-        //inAttributes.window = "card"; // create card
-        inAttributes.window = "popupalert"; // create popup
-        //inAttributes.window="dashboard"; // create dashboard
-        var html='<html><head><script>setTimeout(function(f){var el=window.document.getElementById("b1");console.error(el);el.addEventListener("click",function(f){window.close();},false);},500);</script></head><body>'+message+'<br/><button id="b1">'+buttonName+'</button></body></html>';
-        var inName="PopupAlert";
-        var inUrl="";
-        var inParams={};
-        var inHeight=120;
-        var w = this.openWindow(inUrl, inName, inParams, inAttributes, "height=" + (inHeight || 200));
-        w.document.write(html);
-        w.PalmSystem.stageReady();
     }
 };
 
+require("cordova/commandProxy").add("Camera",module.exports);
+
 });
 
-// file: lib\webos\plugin\webos\orientation.js
-define("cordova/plugin/webos/orientation", function(require, exports, module) {
+// file: lib\windows8\plugin\windows8\CaptureProxy.js
+define("cordova/plugin/windows8/CaptureProxy", function(require, exports, module) {
+
+/*global Windows:true */
+
+var MediaFile = require('cordova/plugin/MediaFile');
+var CaptureError = require('cordova/plugin/CaptureError');
+var CaptureAudioOptions = require('cordova/plugin/CaptureAudioOptions');
+var CaptureImageOptions = require('cordova/plugin/CaptureImageOptions');
+var CaptureVideoOptions = require('cordova/plugin/CaptureVideoOptions');
+var MediaFileData = require('cordova/plugin/MediaFileData');
 
 module.exports = {
-    setOrientation: function(orientation) {
-        PalmSystem.setWindowOrientation(orientation);
-    },
 
-    /*
-     * Returns the current window orientation
-     * orientation is one of 'up', 'down', 'left', 'right', or 'free'
-     */
-    getCurrentOrientation: function() {
-          return PalmSystem.windowOrientation;
-    }
-};
+    captureAudio:function(successCallback, errorCallback, args) {
+        var options = args[0];
 
-});
-
-// file: lib\webos\plugin\webos\pmloglib.js
-define("cordova/plugin/webos/pmloglib", function(require, exports, module) {
-//* Convenience wrapper around PmLogLib logging API
-
-(function() {
-    //* @protected
-
-    // Log level constants
-    var levelNone      = -1;
-    var levelEmergency =  0;
-    var levelAlert     =  1;
-    var levelCritical  =  2;
-    var levelError     =  3;
-    var levelWarning   =  4;
-    var levelNotice    =  5;
-    var levelInfo      =  6;
-    var levelDebug     =  7;
-    var isObject = function(obj) {
-        return !!obj && (typeof obj === "object") && (Object.prototype.toString.call(obj) !== "[object Array]");
-    };
-
-    // Log function stringifies and escapes keyVals, and passes to PmLogString
-    var log = function(level, messageId, keyVals, freeText) {
-        if (window.PalmSystem) {
-            if (keyVals && !isObject(keyVals)) {
-                level = levelError;
-                keyVals = { msgid: messageId };
-                messageId = "MISMATCHED_FMT";
-                freeText = null;
-                console.warn("webOSLog called with invalid format: keyVals must be an object");
-            }
-            if (!messageId && level != levelDebug) {
-                console.warn("webOSLog called with invalid format: messageId was empty");
-            }
-            if (keyVals) {
-                keyVals = JSON.stringify(keyVals);
-            }
-            if(window.PalmSystem.PmLogString) {
-                window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
-            } else {
-                console.error("Unable to send log; PmLogString not found in this version of PalmSystem");
-            }
-        }
-    };
-
-    //* @public
-
-    module.exports = {
-        //* Call PalmSystem.PmLogString with "emergency" level
-        emergency: function(messageId, keyVals, freeText) {
-            log(levelEmergency, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "alert" level
-        alert: function(messageId, keyVals, freeText) {
-            log(levelAlert, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "critical" level
-        critical: function(messageId, keyVals, freeText) {
-            log(levelCritical, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "error" level
-        error: function(messageId, keyVals, freeText) {
-            log(levelError, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "warning" level
-        warning: function(messageId, keyVals, freeText) {
-            log(levelWarning, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "notice" level
-        notice: function(messageId, keyVals, freeText) {
-            log(levelNotice, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "info" level
-        info: function(messageId, keyVals, freeText) {
-            log(levelInfo, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "debug" level.  Note, messageId and keyVals are not allowed.
-        debug: function(freeText) {
-            log(levelDebug, "", "", freeText);
-        }
-    };
-}());
-});
-
-// file: lib\webos\plugin\webos\requestfilesystem.js
-define("cordova/plugin/webos/requestfilesystem", function(require, exports, module) {
-
-module.exports = function(type,size,successCallback,errorCallback) {
-    console.error("requestFileSystem");
-
-    var theFileSystem={};
-    theFileSystem.name="webOS";
-    theFileSystem.root={};
-    theFileSystem.root.name="Root";
-
-    theFileSystem.root.getFile=function(filename,options,successCallback,errorCallback) {
-        console.error("getFile");
-        if (options.create) { errorCallback(); }
-        var theFile=filename;
-        successCallback(theFile);
-    };
-
-    successCallback(theFileSystem);
-};
-
-});
-
-// file: lib\webos\plugin\webos\service.js
-define("cordova/plugin/webos/service", function(require, exports, module) {
-
-function Service() { }
-
-Service.prototype.Request = function (uri, params) {
-    var req = new LS2Request(uri, params);
-    return req;
-}
-
-function LS2Request(uri, params) {
-    this.uri = uri;
-    params = params || {};
-    if(params.method) {
-        if(this.uri.charAt(this.uri.length-1) != "/") {
-            this.uri += "/";
-        }
-        this.uri += params.method;
-    }
-    if(typeof params.onSuccess === 'function') {
-        this.onSuccess = params.onSuccess;
-    }
-    if(typeof params.onFailure === 'function') {
-    this.onFailure = params.onFailure;
-    }
-    if(typeof params.onComplete === 'function') {
-    this.onComplete = params.onComplete;
-    }
-    this.params = (typeof params.parameters === 'object') ? params.parameters : {};
-    this.subscribe = params.subscribe || false;
-    if(this.subscribe) {
-        this.params.subscribe = params.subscribe;
-    }
-    if(this.params.subscribe) {
-        this.subscribe = this.params.subscribe;
-    }
-    this.resubscribe = params.resubscribe || false;
-    this.send();
-}
-
-LS2Request.prototype.send = function() {
-    this.bridge = new PalmServiceBridge();
-    var self = this;
-    this.bridge.onservicecallback = this.callback = function(msg) {
-        var parsedMsg;
-        if(self.cancelled) {
+        var audioOptions = new CaptureAudioOptions();
+        if (typeof(options.duration) == 'undefined') {
+            audioOptions.duration = 3600; // Arbitrary amount, need to change later
+        } else if (options.duration > 0) {
+            audioOptions.duration = options.duration;
+        } else {
+            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
             return;
         }
-        try {
-            parsedMsg = JSON.parse(msg);
-        } catch(e) {
-            parsedMsg = {
-                errorCode: -1,
-                errorText: msg
-            };
+
+        var cameraCaptureAudioDuration = audioOptions.duration;
+        var mediaCaptureSettings;
+        var initCaptureSettings = function () {
+            mediaCaptureSettings = null;
+            mediaCaptureSettings = new Windows.Media.Capture.MediaCaptureInitializationSettings();
+            mediaCaptureSettings.streamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.audio;
+        };
+
+        initCaptureSettings();
+        var mediaCapture = new Windows.Media.Capture.MediaCapture();
+        mediaCapture.initializeAsync(mediaCaptureSettings).done(function () {
+            Windows.Storage.KnownFolders.musicLibrary.createFileAsync("captureAudio.mp3", Windows.Storage.NameCollisionOption.generateUniqueName).then(function (storageFile) {
+                var mediaEncodingProfile = new Windows.Media.MediaProperties.MediaEncodingProfile.createMp3(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
+                var stopRecord = function () {
+                    mediaCapture.stopRecordAsync().then(function (result) {
+                        storageFile.getBasicPropertiesAsync().then(function (basicProperties) {
+                            var results = [];
+                            results.push(new MediaFile(storageFile.name, storageFile.path, storageFile.contentType, basicProperties.dateModified, basicProperties.size));
+                            successCallback(results);
+                        }, function () {
+                            errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
+                        });
+                    }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
+                };
+                mediaCapture.startRecordToStorageFileAsync(mediaEncodingProfile, storageFile).then(function () {
+                    setTimeout(stopRecord, cameraCaptureAudioDuration * 1000);
+                }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
+            }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
+        });
+    },
+
+    captureImage:function (successCallback, errorCallback, args) {
+        var options = args[0];
+        var imageOptions = new CaptureImageOptions();
+        var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
+        cameraCaptureUI.photoSettings.allowCropping = true;
+        cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.highestAvailable;
+        cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.jpeg;
+        cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.photo).then(function (file) {
+            file.moveAsync(Windows.Storage.KnownFolders.picturesLibrary, "cameraCaptureImage.jpg", Windows.Storage.NameCollisionOption.generateUniqueName).then(function () {
+                file.getBasicPropertiesAsync().then(function (basicProperties) {
+                    var results = [];
+                    results.push(new MediaFile(file.name, file.path, file.contentType, basicProperties.dateModified, basicProperties.size));
+                    successCallback(results);
+                }, function () {
+                    errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
+                });
+            }, function () {
+                errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
+            });
+        }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
+    },
+
+    captureVideo:function (successCallback, errorCallback, args) {
+        var options = args[0];
+        var videoOptions = new CaptureVideoOptions();
+        if (options.duration && options.duration > 0) {
+            videoOptions.duration = options.duration;
         }
-        if((parsedMsg.errorCode || parsedMsg.returnValue==false) && self.onFailure) {
-            self.onFailure(parsedMsg);
-            if(self.resubscribe && self.subscribe) {
-                self.delayID = setTimeout(function() {
-                    self.send();
-                }, LS2Request.resubscribeDelay);
+        if (options.limit > 1) {
+            videoOptions.limit = options.limit;
+        }
+        var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
+        cameraCaptureUI.videoSettings.allowTrimming = true;
+        cameraCaptureUI.videoSettings.format = Windows.Media.Capture.CameraCaptureUIVideoFormat.mp4;
+        cameraCaptureUI.videoSettings.maxDurationInSeconds = videoOptions.duration;
+        cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.video).then(function (file) {
+            file.moveAsync(Windows.Storage.KnownFolders.videosLibrary, "cameraCaptureVedio.mp4", Windows.Storage.NameCollisionOption.generateUniqueName).then(function () {
+                file.getBasicPropertiesAsync().then(function (basicProperties) {
+                    var results = [];
+                    results.push(new MediaFile(file.name, file.path, file.contentType, basicProperties.dateModified, basicProperties.size));
+                    successCallback(results);
+                }, function () {
+                    errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
+                });
+            }, function () {
+                errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
+            });
+        }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
+
+    },
+
+    getFormatData: function (successCallback, errorCallback, args) {
+        Windows.Storage.StorageFile.getFileFromPathAsync(args[0]).then(
+            function (storageFile) {
+                var mediaTypeFlag = String(storageFile.contentType).split("/")[0].toLowerCase();
+                if (mediaTypeFlag === "audio") {
+                    storageFile.properties.getMusicPropertiesAsync().then(function (audioProperties) {
+                        successCallback(new MediaFileData(null, audioProperties.bitrate, 0, 0, audioProperties.duration / 1000));
+                    }, function () {
+                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                    });
+                }
+                else if (mediaTypeFlag === "video") {
+                    storageFile.properties.getVideoPropertiesAsync().then(function (videoProperties) {
+                        successCallback(new MediaFileData(null, videoProperties.bitrate, videoProperties.height, videoProperties.width, videoProperties.duration / 1000));
+                    }, function () {
+                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                    });
+                }
+                else if (mediaTypeFlag === "image") {
+                    storageFile.properties.getImagePropertiesAsync().then(function (imageProperties) {
+                        successCallback(new MediaFileData(null, 0, imageProperties.height, imageProperties.width, 0));
+                    }, function () {
+                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                    });
+                }
+                else { errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT)); }
+            }, function () {
+                errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
             }
-        } else if(self.onSuccess) {
-            self.onSuccess(parsedMsg);
-        }
-        if(self.onComplete) {
-            self.onComplete(parsedMsg);
-        }
-    };
-    this.bridge.call(this.uri, JSON.stringify(this.params));
+        );
+    }
 };
 
-LS2Request.prototype.cancel = function() {
-    this.cancelled = true;
-    if(this.resubscribeJob) {
-            clearTimeout(this.delayID)
+require("cordova/commandProxy").add("Capture",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\CompassProxy.js
+define("cordova/plugin/windows8/CompassProxy", function(require, exports, module) {
+
+/*global Windows:true */
+
+var cordova = require('cordova'),
+    CompassHeading = require('cordova/plugin/CompassHeading');
+
+
+module.exports = {
+
+    onReadingChanged:null,
+    getHeading:function(win,lose) {
+        var deviceCompass = Windows.Devices.Sensors.Compass.getDefault();
+        if(!deviceCompass) {
+            setTimeout(function(){lose("Compass not available");},0);
         }
-        if(this.bridge) {
-            this.bridge.cancel();
-            this.bridge = undefined;
+        else {
+
+            deviceCompass.reportInterval = Math.max(16,deviceCompass.minimumReportInterval);
+
+            this.onReadingChanged = function(e) {
+                var reading = e.reading;
+                var heading = new CompassHeading(reading.headingMagneticNorth, reading.headingTrueNorth);
+                win(heading);
+            };
+            deviceCompass.addEventListener("readingchanged",this.onReadingChanged);
         }
+
+    },
+    stopHeading:function(win,lose) {
+        var deviceCompass = Windows.Devices.Sensors.Compass.getDefault();
+        if(!deviceCompass) {
+            setTimeout(function(){lose("Compass not available");},0);
+        }
+        else {
+
+            deviceCompass.removeEventListener("readingchanged",this.onReadingChanged);
+            this.onReadingChanged = null;
+            deviceCompass.reportInterval = 0;
+            win();
+        }
+
+    }
 };
 
-LS2Request.prototype.toString = function() {
-    return "[LS2Request]";
+require("cordova/commandProxy").add("Compass",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\ContactsProxy.js
+define("cordova/plugin/windows8/ContactsProxy", function(require, exports, module) {
+
+var cordova = require('cordova');
+
+module.exports = {
+    search: function (win, fail, args) {
+        var fields = args[0];
+        var options = args[1];
+        var picker = Windows.ApplicationModel.Contacts.ContactPicker();
+        picker.commitButtonText = "Select";
+        picker.selectionMode = Windows.ApplicationModel.Contacts.ContactSelectionMode.contacts;
+
+        picker.desiredFields.push.apply(picker.desiredFields, fields);
+
+        if (options.multiple) {
+            picker.pickMultipleContactsAsync().then(function (contacts) {
+                win(contacts);
+            });
+        }
+        else {
+            picker.pickSingleContactAsync().then(function (contact) {
+                win([contact]);
+            });
+        }
+    }
+
 };
 
-LS2Request.resubscribeDelay = 10000;
+require("cordova/commandProxy").add("Contacts",module.exports);
+});
 
-module.exports = new Service();
+// file: lib\windows8\plugin\windows8\DeviceProxy.js
+define("cordova/plugin/windows8/DeviceProxy", function(require, exports, module) {
+
+var cordova = require('cordova');
+var utils = require('cordova/utils');
+var FileError = require('cordova/plugin/FileError');
+
+
+module.exports = {
+
+    getDeviceInfo:function(win,fail,args) {
+        //console.log("NativeProxy::getDeviceInfo");
+        var hostNames = Windows.Networking.Connectivity.NetworkInformation.getHostNames();
+
+        var name = "unknown";
+        hostNames.some(function (nm) {
+            if (nm.displayName.indexOf(".local") > -1) {
+                name = nm.displayName.split(".local")[0];
+                return true;
+            }
+        });
+
+        // deviceId aka uuid, stored in Windows.Storage.ApplicationData.current.localSettings.values.deviceId
+        var deviceId;
+        var localSettings = Windows.Storage.ApplicationData.current.localSettings;
+
+        if (localSettings.values.deviceId) {
+            deviceId = localSettings.values.deviceId;
+        }
+        else {
+            deviceId = localSettings.values.deviceId = utils.createUUID();
+        }
+
+        setTimeout(function () {
+            win({ platform: "windows8", version: "8", name: name, uuid: deviceId, cordova: CORDOVA_JS_BUILD_LABEL });
+        }, 0);
+    }
+
+};
+
+require("cordova/commandProxy").add("Device",module.exports);
 
 });
 
-// file: lib\webos\plugin\webos\window.js
-define("cordova/plugin/webos/window", function(require, exports, module) {
+// file: lib\windows8\plugin\windows8\FileProxy.js
+define("cordova/plugin/windows8/FileProxy", function(require, exports, module) {
 
-module.exports={
-    launchParams: function() {
-        return JSON.parse(PalmSystem.launchParams) || {};
-    },
-    /*
-     * This is a thin wrapper for 'window.open()' which optionally sets document contents to 'html', and calls 'PalmSystem.stageReady()'
-     * on your new card. Note that this new card will not come with your framework (if any) or anything for that matter.
-     * @param {String} url
-     * @param {String} html
-     * Example:
-     *        navigator.window.newCard('about:blank', '<html><body>Hello again!</body></html>');
-     */
-    newCard: function(url, html) {
-        var win = window.open(url || "");
-        if (html)
-            win.document.write(html);
-        win.PalmSystem.stageReady();
+var cordova = require('cordova');
+var Entry = require('cordova/plugin/Entry'),
+    File = require('cordova/plugin/File'),
+    FileEntry = require('cordova/plugin/FileEntry'),
+    FileError = require('cordova/plugin/FileError'),
+    DirectoryEntry = require('cordova/plugin/DirectoryEntry'),
+    Flags = require('cordova/plugin/Flags'),
+    FileSystem = require('cordova/plugin/FileSystem'),
+    LocalFileSystem = require('cordova/plugin/LocalFileSystem');
+
+module.exports = {
+
+    getFileMetadata:function(win,fail,args) {
+        var fullPath = args[0];
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).done(
+            function (storageFile) {
+                storageFile.getBasicPropertiesAsync().then(
+                    function (basicProperties) {
+                        win(new File(storageFile.name, storageFile.path, storageFile.fileType, basicProperties.dateModified, basicProperties.size));
+                    }, function () {
+                        fail && fail(FileError.NOT_READABLE_ERR);
+                    }
+                );
+            }, function () {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
     },
 
-    /*
-     * Enable or disable full screen display (full screen removes the app menu bar and the rounded corners of the screen).
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.setFullScreen(true);
-     */
-    setFullScreen: function(state) {
-        // valid state values are: true or false
-        PalmSystem.enableFullScreenMode(state);
+    getMetadata:function(success,fail,args) {
+        var fullPath = args[0];
+
+        var dealFile = function (sFile) {
+            Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
+                function (storageFile) {
+                    return storageFile.getBasicPropertiesAsync();
+                },
+                function () {
+                    fail && fail(FileError.NOT_READABLE_ERR);
+                }
+            // get the basic properties of the file.
+            ).then(
+                function (basicProperties) {
+                    success(basicProperties.dateModified);
+                },
+                function () {
+                    fail && fail(FileError.NOT_READABLE_ERR);
+                }
+            );
+        };
+
+        var dealFolder = function (sFolder) {
+            Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+                function (storageFolder) {
+                    return storageFolder.getBasicPropertiesAsync();
+                },
+                function () {
+                    fail && fail(FileError.NOT_READABLE_ERR);
+                }
+            // get the basic properties of the folder.
+            ).then(
+                function (basicProperties) {
+                    success(basicProperties.dateModified);
+                },
+                function () {
+                    fail && fail(FileError.NOT_FOUND_ERR);
+                }
+            );
+        };
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
+            // the path is file.
+            function (sFile) {
+                dealFile(sFile);
+            },
+            // the path is folder
+            function () {
+                Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+                    function (sFolder) {
+                        dealFolder(sFolder);
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }
+                );
+            }
+        );
     },
 
-    /*
-     * used to set the window properties of the WebOS app
-     * @param {Object} props
-     * Example:
-     *         private method used by other member functions - ideally we shouldn't call this method
-     */
-    setWindowProperties: function(inWindow, inProps) {
-        if(arguments.length==1) {
-            inProps = inWindow;
-            inWindow = window;
+    getParent:function(win,fail,args) { // ["fullPath"]
+        var fullPath = args[0];
+
+        var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
+        var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
+
+        if (fullPath == storageFolderPer.path) {
+            win(new DirectoryEntry(storageFolderPer.name, storageFolderPer.path));
+            return;
+        } else if (fullPath == storageFolderTem.path) {
+            win(new DirectoryEntry(storageFolderTem.name, storageFolderTem.path));
+            return;
         }
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.setWindowProperties(inProps);
+        var splitArr = fullPath.split(new RegExp(/\/|\\/g));
+
+        var popItem = splitArr.pop();
+
+        var result = new DirectoryEntry(popItem, fullPath.substr(0, fullPath.length - popItem.length - 1));
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(result.fullPath).done(
+            function () { win(result); },
+            function () { fail && fail(FileError.INVALID_STATE_ERR); }
+        );
+    },
+
+    readAsText:function(win,fail,args) {
+        var fileName = args[0];
+        var enc = args[1];
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(
+            function (storageFile) {
+                var value = Windows.Storage.Streams.UnicodeEncoding.utf8;
+                if (enc == 'Utf16LE' || enc == 'utf16LE') {
+                    value = Windows.Storage.Streams.UnicodeEncoding.utf16LE;
+                }else if (enc == 'Utf16BE' || enc == 'utf16BE') {
+                    value = Windows.Storage.Streams.UnicodeEncoding.utf16BE;
+                }
+                Windows.Storage.FileIO.readTextAsync(storageFile, value).done(
+                    function (fileContent) {
+                        win(fileContent);
+                    },
+                    function () {
+                        fail && fail(FileError.ENCODING_ERR);
+                    }
+                );
+            }, function () {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
+    },
+
+    readAsDataURL:function(win,fail,args) {
+        var fileName = args[0];
+
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).then(
+            function (storageFile) {
+                Windows.Storage.FileIO.readBufferAsync(storageFile).done(
+                    function (buffer) {
+                        var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
+                        //the method encodeToBase64String will add "77u/" as a prefix, so we should remove it
+                        if(String(strBase64).substr(0,4) == "77u/") {
+                            strBase64 = strBase64.substr(4);
+                        }
+                        var mediaType = storageFile.contentType;
+                        var result = "data:" + mediaType + ";base64," + strBase64;
+                        win(result);
+                    }
+                );
+            }, function () {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
+    },
+
+    getDirectory:function(win,fail,args) {
+        var fullPath = args[0];
+        var path = args[1];
+        var options = args[2];
+
+        var flag = "";
+        if (options !== null) {
+            flag = new Flags(options.create, options.exclusive);
+        } else {
+            flag = new Flags(false, false);
         }
+
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+            function (storageFolder) {
+                if (flag.create === true && flag.exclusive === true) {
+                    storageFolder.createFolderAsync(path, Windows.Storage.CreationCollisionOption.failIfExists).done(
+                        function (storageFolder) {
+                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                        }, function () {
+                            fail && fail(FileError.PATH_EXISTS_ERR);
+                        }
+                    );
+                } else if (flag.create === true && flag.exclusive === false) {
+                    storageFolder.createFolderAsync(path, Windows.Storage.CreationCollisionOption.openIfExists).done(
+                        function (storageFolder) {
+                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                        }, function () {
+                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                        }
+                    );
+                } else if (flag.create === false) {
+                    if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(path)) {
+                        fail && fail(FileError.ENCODING_ERR);
+                        return;
+                    }
+
+                    storageFolder.getFolderAsync(path).done(
+                        function (storageFolder) {
+                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                        }, function () {
+                            fail && fail(FileError.NOT_FOUND_ERR);
+                        }
+                    );
+                }
+            }, function () {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
     },
 
-    /*
-     * Enable or disable screen timeout. When enabled, the device screen will not dim. This is useful for navigation, clocks or other "dock" apps.
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.blockScreenTimeout(true);
-     */
-    blockScreenTimeout: function(state) {
-        navigator.windowProperties.blockScreenTimeout = state;
-        this.setWindowProperties(navigator.windowProperties);
+    remove:function(win,fail,args) {
+        var fullPath = args[0];
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
+            function (sFile) {
+                Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).done(function (storageFile) {
+                    storageFile.deleteAsync().done(win, function () {
+                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+
+                    });
+                });
+            },
+            function () {
+                Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+                    function (sFolder) {
+                        var removeEntry = function () {
+                            var storageFolderTop = null;
+
+                            Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+                                function (storageFolder) {
+                                    // FileSystem root can't be removed!
+                                    var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
+                                    var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
+                                    if (fullPath == storageFolderPer.path || fullPath == storageFolderTem.path) {
+                                        fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                                        return;
+                                    }
+                                    storageFolderTop = storageFolder;
+                                    return storageFolder.createFileQuery().getFilesAsync();
+                                }, function () {
+                                    fail && fail(FileError.INVALID_MODIFICATION_ERR);
+
+                                }
+                            // check sub-files.
+                            ).then(function (fileList) {
+                                if (fileList) {
+                                    if (fileList.length === 0) {
+                                        return storageFolderTop.createFolderQuery().getFoldersAsync();
+                                    } else {
+                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                    }
+                                }
+                            // check sub-folders.
+                            }).then(function (folderList) {
+                                if (folderList) {
+                                    if (folderList.length === 0) {
+                                        storageFolderTop.deleteAsync().done(win, function () {
+                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+
+                                        });
+                                    } else {
+                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                    }
+                                }
+
+                            });
+                        };
+                        removeEntry();
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }
+                );
+            }
+        );
     },
 
-    /*
-     * Sets the lightbar to be a little dimmer for screen locked notifications.
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.setSubtleLightbar(true);
-     */
-    setSubtleLightbar: function(state) {
-        navigator.windowProperties.setSubtleLightbar = state;
-        this.setWindowProperties(navigator.windowProperties);
+    removeRecursively:function(successCallback,fail,args) {
+        var fullPath = args[0];
+
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).done(function (storageFolder) {
+        var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
+        var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
+
+        if (storageFolder.path == storageFolderPer.path || storageFolder.path == storageFolderTem.path) {
+            fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
+            return;
+        }
+
+        var removeFolders = function (path) {
+            return new WinJS.Promise(function (complete) {
+                var filePromiseArr = [];
+                var storageFolderTop = null;
+                Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
+                    function (storageFolder) {
+                        var fileListPromise = storageFolder.createFileQuery().getFilesAsync();
+
+                        storageFolderTop = storageFolder;
+                        return fileListPromise;
+                    }
+                // remove all the files directly under the folder.
+                ).then(function (fileList) {
+                    if (fileList !== null) {
+                        for (var i = 0; i < fileList.length; i++) {
+                            var filePromise = fileList[i].deleteAsync();
+                            filePromiseArr.push(filePromise);
+                        }
+                    }
+                    WinJS.Promise.join(filePromiseArr).then(function () {
+                        var folderListPromise = storageFolderTop.createFolderQuery().getFoldersAsync();
+                        return folderListPromise;
+                    // remove empty folders.
+                    }).then(function (folderList) {
+                        var folderPromiseArr = [];
+                        if (folderList.length !== 0) {
+                            for (var j = 0; j < folderList.length; j++) {
+
+                                folderPromiseArr.push(removeFolders(folderList[j].path));
+                            }
+                            WinJS.Promise.join(folderPromiseArr).then(function () {
+                                storageFolderTop.deleteAsync().then(complete);
+                            });
+                        } else {
+                            storageFolderTop.deleteAsync().then(complete);
+                        }
+                    }, function () { });
+                }, function () { });
+            });
+        };
+        removeFolders(storageFolder.path).then(function () {
+            Windows.Storage.StorageFolder.getFolderFromPathAsync(storageFolder.path).then(
+                function () {},
+                function () {
+                    if (typeof successCallback !== 'undefined' && successCallback !== null) { successCallback(); }
+                });
+            });
+        });
+    },
+
+    getFile:function(win,fail,args) {
+        var fullPath = args[0];
+        var path = args[1];
+        var options = args[2];
+
+        var flag = "";
+        if (options !== null) {
+            flag = new Flags(options.create, options.exclusive);
+        } else {
+            flag = new Flags(false, false);
+        }
+
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
+            function (storageFolder) {
+                if (flag.create === true && flag.exclusive === true) {
+                    storageFolder.createFileAsync(path, Windows.Storage.CreationCollisionOption.failIfExists).done(
+                        function (storageFile) {
+                            win(new FileEntry(storageFile.name, storageFile.path));
+                        }, function () {
+                            fail && fail(FileError.PATH_EXISTS_ERR);
+                        }
+                    );
+                } else if (flag.create === true && flag.exclusive === false) {
+                    storageFolder.createFileAsync(path, Windows.Storage.CreationCollisionOption.openIfExists).done(
+                        function (storageFile) {
+                            win(new FileEntry(storageFile.name, storageFile.path));
+                        }, function () {
+                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                        }
+                    );
+                } else if (flag.create === false) {
+                    if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(path)) {
+                        fail && fail(FileError.ENCODING_ERR);
+                        return;
+                    }
+                    storageFolder.getFileAsync(path).done(
+                        function (storageFile) {
+                            win(new FileEntry(storageFile.name, storageFile.path));
+                        }, function () {
+                            fail && fail(FileError.NOT_FOUND_ERR);
+                        }
+                    );
+                }
+            }, function () {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
+    },
+
+    readEntries:function(win,fail,args) { // ["fullPath"]
+        var path = args[0];
+
+        var result = [];
+
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(function (storageFolder) {
+            var promiseArr = [];
+            var index = 0;
+            promiseArr[index++] = storageFolder.createFileQuery().getFilesAsync().then(function (fileList) {
+                if (fileList !== null) {
+                    for (var i = 0; i < fileList.length; i++) {
+                        result.push(new FileEntry(fileList[i].name, fileList[i].path));
+                    }
+                }
+            });
+            promiseArr[index++] = storageFolder.createFolderQuery().getFoldersAsync().then(function (folderList) {
+                if (folderList !== null) {
+                    for (var j = 0; j < folderList.length; j++) {
+                        result.push(new FileEntry(folderList[j].name, folderList[j].path));
+                    }
+                }
+            });
+            WinJS.Promise.join(promiseArr).then(function () {
+                win(result);
+            });
+
+        }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
+    },
+
+    write:function(win,fail,args) {
+        var fileName = args[0];
+        var text = args[1];
+        var position = args[2];
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(
+            function (storageFile) {
+                Windows.Storage.FileIO.writeTextAsync(storageFile,text,Windows.Storage.Streams.UnicodeEncoding.utf8).done(
+                    function() {
+                        win(String(text).length);
+                    }, function () {
+                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                    }
+                );
+            }, function() {
+                fail && fail(FileError.NOT_FOUND_ERR);
+            }
+        );
+    },
+
+    truncate:function(win,fail,args) { // ["fileName","size"]
+        var fileName = args[0];
+        var size = args[1];
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(function(storageFile){
+            //the current length of the file.
+            var leng = 0;
+
+            storageFile.getBasicPropertiesAsync().then(function (basicProperties) {
+                leng = basicProperties.size;
+                if (Number(size) >= leng) {
+                    win(this.length);
+                    return;
+                }
+                if (Number(size) >= 0) {
+                    Windows.Storage.FileIO.readTextAsync(storageFile, Windows.Storage.Streams.UnicodeEncoding.utf8).then(function (fileContent) {
+                        fileContent = fileContent.substr(0, size);
+                        var fullPath = storageFile.path;
+                        var name = storageFile.name;
+                        var entry = new Entry(true, false, name, fullPath);
+                        var parentPath = "";
+                        var successCallBack = function (entry) {
+                            parentPath = entry.fullPath;
+                            storageFile.deleteAsync().then(function () {
+                                return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
+                            }).then(function (storageFolder) {
+                                storageFolder.createFileAsync(name).then(function (newStorageFile) {
+                                    Windows.Storage.FileIO.writeTextAsync(newStorageFile, fileContent).done(function () {
+                                        win(String(fileContent).length);
+                                    }, function () {
+                                        fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                                    });
+                                });
+                            });
+                        };
+                        entry.getParent(successCallBack, null);
+                    }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
+                }
+            });
+        }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
+    },
+
+    copyTo:function(success,fail,args) { // ["fullPath","parent", "newName"]
+        var srcPath = args[0];
+        var parentFullPath = args[1];
+        var name = args[2];
+
+        //name can't be invalid
+        if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(name)) {
+            fail && fail(FileError.ENCODING_ERR);
+            return;
+        }
+        // copy
+        var copyFiles = "";
+        Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(
+            function (sFile) {
+                copyFiles = function (srcPath, parentPath) {
+                    var storageFileTop = null;
+                    Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(function (storageFile) {
+                        storageFileTop = storageFile;
+                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
+                    }, function () {
+
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }).then(function (storageFolder) {
+                        storageFileTop.copyAsync(storageFolder, name, Windows.Storage.NameCollisionOption.failIfExists).then(function (storageFile) {
+
+                            success(new FileEntry(storageFile.name, storageFile.path));
+                        }, function () {
+
+                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                        });
+                    }, function () {
+
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    });
+                };
+                var copyFinish = function (srcPath, parentPath) {
+                    copyFiles(srcPath, parentPath);
+                };
+                copyFinish(srcPath, parentFullPath);
+            },
+            function () {
+                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(
+                    function (sFolder) {
+                        copyFiles = function (srcPath, parentPath) {
+                            var coreCopy = function (storageFolderTop, complete) {
+                                storageFolderTop.createFolderQuery().getFoldersAsync().then(function (folderList) {
+                                    var folderPromiseArr = [];
+                                    if (folderList.length === 0) { complete(); }
+                                    else {
+                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolderTarget) {
+                                            var tempPromiseArr = [];
+                                            var index = 0;
+                                            for (var j = 0; j < folderList.length; j++) {
+                                                tempPromiseArr[index++] = storageFolderTarget.createFolderAsync(folderList[j].name).then(function (targetFolder) {
+                                                    folderPromiseArr.push(copyFiles(folderList[j].path, targetFolder.path));
+                                                });
+                                            }
+                                            WinJS.Promise.join(tempPromiseArr).then(function () {
+                                                WinJS.Promise.join(folderPromiseArr).then(complete);
+                                            });
+                                        });
+                                    }
+                                });
+                            };
+
+                            return new WinJS.Promise(function (complete) {
+                                var storageFolderTop = null;
+                                var filePromiseArr = [];
+                                var fileListTop = null;
+                                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (storageFolder) {
+                                    storageFolderTop = storageFolder;
+                                    return storageFolder.createFileQuery().getFilesAsync();
+                                }).then(function (fileList) {
+                                    fileListTop = fileList;
+                                    if (fileList) {
+                                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
+                                    }
+                                }).then(function (targetStorageFolder) {
+                                    for (var i = 0; i < fileListTop.length; i++) {
+                                        filePromiseArr.push(fileListTop[i].copyAsync(targetStorageFolder));
+                                    }
+                                    WinJS.Promise.join(filePromiseArr).then(function () {
+                                        coreCopy(storageFolderTop, complete);
+                                    });
+                                });
+                            });
+                        };
+                        var copyFinish = function (srcPath, parentPath) {
+                            Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolder) {
+                                storageFolder.createFolderAsync(name, Windows.Storage.CreationCollisionOption.openIfExists).then(function (newStorageFolder) {
+                                    //can't copy onto itself
+                                    if (srcPath == newStorageFolder.path) {
+                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                        return;
+                                    }
+                                    //can't copy into itself
+                                    if (srcPath == parentPath) {
+                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                        return;
+                                    }
+                                    copyFiles(srcPath, newStorageFolder.path).then(function () {
+                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(newStorageFolder.path).done(
+                                            function (storageFolder) {
+                                                success(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                                            },
+                                            function () { fail && fail(FileError.NOT_FOUND_ERR); }
+                                        );
+                                    });
+                                }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
+                            }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
+                        };
+                        copyFinish(srcPath, parentFullPath);
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }
+                );
+            }
+        );
+    },
+
+    moveTo:function(success,fail,args) {
+        var srcPath = args[0];
+        var parentFullPath = args[1];
+        var name = args[2];
+
+
+        //name can't be invalid
+        if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(name)) {
+            fail && fail(FileError.ENCODING_ERR);
+            return;
+        }
+
+        var moveFiles = "";
+        Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(
+            function (sFile) {
+                moveFiles = function (srcPath, parentPath) {
+                    var storageFileTop = null;
+                    Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(function (storageFile) {
+                        storageFileTop = storageFile;
+                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }).then(function (storageFolder) {
+                        storageFileTop.moveAsync(storageFolder, name, Windows.Storage.NameCollisionOption.replaceExisting).then(function () {
+                            success(new FileEntry(name, storageFileTop.path));
+                        }, function () {
+                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                        });
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    });
+                };
+                var moveFinish = function (srcPath, parentPath) {
+                    //can't copy onto itself
+                    if (srcPath == parentPath + "\\" + name) {
+                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                        return;
+                    }
+                    moveFiles(srcPath, parentFullPath);
+                };
+                moveFinish(srcPath, parentFullPath);
+            },
+            function () {
+                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(
+                    function (sFolder) {
+                        moveFiles = function (srcPath, parentPath) {
+                            var coreMove = function (storageFolderTop, complete) {
+                                storageFolderTop.createFolderQuery().getFoldersAsync().then(function (folderList) {
+                                    var folderPromiseArr = [];
+                                    if (folderList.length === 0) {
+                                        // If failed, we must cancel the deletion of folders & files.So here wo can't delete the folder.
+                                        complete();
+                                    }
+                                    else {
+                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolderTarget) {
+                                            var tempPromiseArr = [];
+                                            var index = 0;
+                                            for (var j = 0; j < folderList.length; j++) {
+                                                tempPromiseArr[index++] = storageFolderTarget.createFolderAsync(folderList[j].name).then(function (targetFolder) {
+                                                    folderPromiseArr.push(moveFiles(folderList[j].path, targetFolder.path));
+                                                });
+                                            }
+                                            WinJS.Promise.join(tempPromiseArr).then(function () {
+                                                WinJS.Promise.join(folderPromiseArr).then(complete);
+                                            });
+                                        });
+                                    }
+                                });
+                            };
+                            return new WinJS.Promise(function (complete) {
+                                var storageFolderTop = null;
+                                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (storageFolder) {
+                                    storageFolderTop = storageFolder;
+                                    return storageFolder.createFileQuery().getFilesAsync();
+                                }).then(function (fileList) {
+                                    var filePromiseArr = [];
+                                    Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (dstStorageFolder) {
+                                        if (fileList) {
+                                            for (var i = 0; i < fileList.length; i++) {
+                                                filePromiseArr.push(fileList[i].moveAsync(dstStorageFolder));
+                                            }
+                                        }
+                                        WinJS.Promise.join(filePromiseArr).then(function () {
+                                            coreMove(storageFolderTop, complete);
+                                        }, function () { });
+                                    });
+                                });
+                            });
+                        };
+                        var moveFinish = function (srcPath, parentPath) {
+                            var originFolderTop = null;
+                            Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (originFolder) {
+                                originFolderTop = originFolder;
+                                return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
+                            }, function () {
+                                fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                            }).then(function (storageFolder) {
+                                return storageFolder.createFolderAsync(name, Windows.Storage.CreationCollisionOption.openIfExists);
+                            }, function () {
+                                fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                            }).then(function (newStorageFolder) {
+                                //can't move onto directory that is not empty
+                                newStorageFolder.createFileQuery().getFilesAsync().then(function (fileList) {
+                                    newStorageFolder.createFolderQuery().getFoldersAsync().then(function (folderList) {
+                                        if (fileList.length !== 0 || folderList.length !== 0) {
+                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                            return;
+                                        }
+                                        //can't copy onto itself
+                                        if (srcPath == newStorageFolder.path) {
+                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                            return;
+                                        }
+                                        //can't copy into itself
+                                        if (srcPath == parentPath) {
+                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
+                                            return;
+                                        }
+                                        moveFiles(srcPath, newStorageFolder.path).then(function () {
+                                            var successCallback = function () {
+                                                success(new DirectoryEntry(name, newStorageFolder.path));
+                                            };
+                                            var temp = new DirectoryEntry(originFolderTop.name, originFolderTop.path).removeRecursively(successCallback, fail);
+
+                                        }, function () { console.log("error!"); });
+                                    });
+                                });
+                            }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
+
+                        };
+                        moveFinish(srcPath, parentFullPath);
+                    }, function () {
+                        fail && fail(FileError.NOT_FOUND_ERR);
+                    }
+                );
+            }
+        );
+    },
+    tempFileSystem:null,
+
+    persistentFileSystem:null,
+
+    requestFileSystem:function(win,fail,args) {
+        var type = args[0];
+        var size = args[1];
+
+        var filePath = "";
+        var result = null;
+        var fsTypeName = "";
+
+        switch (type) {
+            case LocalFileSystem.TEMPORARY:
+                filePath = Windows.Storage.ApplicationData.current.temporaryFolder.path;
+                fsTypeName = "temporary";
+                break;
+            case LocalFileSystem.PERSISTENT:
+                filePath = Windows.Storage.ApplicationData.current.localFolder.path;
+                fsTypeName = "persistent";
+                break;
+        }
+
+        var MAX_SIZE = 10000000000;
+        if (size > MAX_SIZE) {
+            fail && fail(FileError.QUOTA_EXCEEDED_ERR);
+            return;
+        }
+
+        var fileSystem = new FileSystem(fsTypeName, new DirectoryEntry(fsTypeName, filePath));
+        result = fileSystem;
+        win(result);
+    },
+
+    resolveLocalFileSystemURI:function(success,fail,args) {
+        var uri = args[0];
+
+        var path = uri;
+
+        // support for file name with parameters
+        if (/\?/g.test(path)) {
+            path = String(path).split("?")[0];
+        }
+
+        // support for encodeURI
+        if (/\%5/g.test(path)) {
+            path = decodeURI(path);
+        }
+
+        // support for special path start with file:///
+        if (path.substr(0, 8) == "file:///") {
+            path = Windows.Storage.ApplicationData.current.localFolder.path + "\\" + String(path).substr(8).split("/").join("\\");
+            Windows.Storage.StorageFile.getFileFromPathAsync(path).then(
+                function (storageFile) {
+                    success(new FileEntry(storageFile.name, storageFile.path));
+                }, function () {
+                    Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
+                        function (storageFolder) {
+                            success(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                        }, function () {
+                            fail && fail(FileError.NOT_FOUND_ERR);
+                        }
+                    );
+                }
+            );
+        } else {
+            Windows.Storage.StorageFile.getFileFromPathAsync(path).then(
+                function (storageFile) {
+                    success(new FileEntry(storageFile.name, storageFile.path));
+                }, function () {
+                    Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
+                        function (storageFolder) {
+                            success(new DirectoryEntry(storageFolder.name, storageFolder.path));
+                        }, function () {
+                            fail && fail(FileError.ENCODING_ERR);
+                        }
+                    );
+                }
+            );
+        }
+    }
+
+};
+
+require("cordova/commandProxy").add("File",module.exports);
+
+});
+
+// file: lib\windows8\plugin\windows8\FileTransferProxy.js
+define("cordova/plugin/windows8/FileTransferProxy", function(require, exports, module) {
+
+
+var FileTransferError = require('cordova/plugin/FileTransferError'),
+    FileUploadResult = require('cordova/plugin/FileUploadResult'),
+    FileEntry = require('cordova/plugin/FileEntry');
+
+module.exports = {
+
+    upload:function(successCallback, error, options) {
+        var filePath = options[0];
+        var server = options[1];
+
+
+        var win = function (fileUploadResult) {
+            successCallback(fileUploadResult);
+        };
+
+        if (filePath === null || typeof filePath === 'undefined') {
+            error(FileTransferError.FILE_NOT_FOUND_ERR);
+            return;
+        }
+
+        if (String(filePath).substr(0, 8) == "file:///") {
+            filePath = Windows.Storage.ApplicationData.current.localFolder.path + String(filePath).substr(8).split("/").join("\\");
+        }
+
+        Windows.Storage.StorageFile.getFileFromPathAsync(filePath).then(function (storageFile) {
+            storageFile.openAsync(Windows.Storage.FileAccessMode.read).then(function (stream) {
+                var blob = MSApp.createBlobFromRandomAccessStream(storageFile.contentType, stream);
+                var formData = new FormData();
+                formData.append("source\";filename=\"" + storageFile.name + "\"", blob);
+                WinJS.xhr({ type: "POST", url: server, data: formData }).then(function (response) {
+                    var code = response.status;
+                    storageFile.getBasicPropertiesAsync().done(function (basicProperties) {
+
+                        Windows.Storage.FileIO.readBufferAsync(storageFile).done(function (buffer) {
+                            var dataReader = Windows.Storage.Streams.DataReader.fromBuffer(buffer);
+                            var fileContent = dataReader.readString(buffer.length);
+                            dataReader.close();
+                            win(new FileUploadResult(basicProperties.size, code, fileContent));
+
+                        });
+
+                    });
+                }, function () {
+                    error(FileTransferError.INVALID_URL_ERR);
+                });
+            });
+
+        },function(){error(FileTransferError.FILE_NOT_FOUND_ERR);});
+    },
+
+    download:function(win, error, options) {
+        var source = options[0];
+        var target = options[1];
+
+
+        if (target === null || typeof target === undefined) {
+            error(FileTransferError.FILE_NOT_FOUND_ERR);
+            return;
+        }
+        if (String(target).substr(0, 8) == "file:///") {
+            target = Windows.Storage.ApplicationData.current.localFolder.path + String(target).substr(8).split("/").join("\\");
+        }
+        var path = target.substr(0, String(target).lastIndexOf("\\"));
+        var fileName = target.substr(String(target).lastIndexOf("\\") + 1);
+        if (path === null || fileName === null) {
+            error(FileTransferError.FILE_NOT_FOUND_ERR);
+            return;
+        }
+
+        var download = null;
+
+
+        Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(function (storageFolder) {
+            storageFolder.createFileAsync(fileName, Windows.Storage.CreationCollisionOption.generateUniqueName).then(function (storageFile) {
+                var uri = Windows.Foundation.Uri(source);
+                var downloader = new Windows.Networking.BackgroundTransfer.BackgroundDownloader();
+                download = downloader.createDownload(uri, storageFile);
+                download.startAsync().then(function () {
+                    win(new FileEntry(storageFile.name, storageFile.path));
+                }, function () {
+                    error(FileTransferError.INVALID_URL_ERR);
+                });
+            });
+        });
     }
 };
+
+require("cordova/commandProxy").add("FileTransfer",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\MediaFile.js
+define("cordova/plugin/windows8/MediaFile", function(require, exports, module) {
+
+/*global Windows:true */
+
+var MediaFileData = require('cordova/plugin/MediaFileData');
+var CaptureError = require('cordova/plugin/CaptureError');
+
+module.exports = {
+
+    getFormatData: function (successCallback, errorCallback, args) {
+        Windows.Storage.StorageFile.getFileFromPathAsync(this.fullPath).then(
+            function (storageFile) {
+                var mediaTypeFlag = String(storageFile.contentType).split("/")[0].toLowerCase();
+                if (mediaTypeFlag === "audio") {
+                    storageFile.properties.getMusicPropertiesAsync().then(
+                        function (audioProperties) {
+                            successCallback(new MediaFileData(null, audioProperties.bitrate, 0, 0, audioProperties.duration / 1000));
+                        }, function () {
+                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                        }
+                    );
+                } else if (mediaTypeFlag === "video") {
+                    storageFile.properties.getVideoPropertiesAsync().then(
+                        function (videoProperties) {
+                            successCallback(new MediaFileData(null, videoProperties.bitrate, videoProperties.height, videoProperties.width, videoProperties.duration / 1000));
+                        }, function () {
+                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                        }
+                    );
+                } else if (mediaTypeFlag === "image") {
+                    storageFile.properties.getImagePropertiesAsync().then(
+                        function (imageProperties) {
+                            successCallback(new MediaFileData(null, 0, imageProperties.height, imageProperties.width, 0));
+                        }, function () {
+                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                        }
+                    );
+                } else {
+                    errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+                }
+            }, function () {
+                errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
+            }
+        );
+    }
+};
+
+});
+
+// file: lib\windows8\plugin\windows8\MediaProxy.js
+define("cordova/plugin/windows8/MediaProxy", function(require, exports, module) {
+
+/*global Windows:true */
+
+var cordova = require('cordova'),
+    Media = require('cordova/plugin/Media');
+
+var MediaError = require('cordova/plugin/MediaError');
+
+module.exports = {
+    mediaCaptureMrg:null,
+
+    // Initiates the audio file
+    create:function(win, lose, args) {
+        var id = args[0];
+        var src = args[1];
+        var thisM = Media.get(id);
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STARTING);
+
+        Media.prototype.node = null;
+
+        var fn = src.split('.').pop(); // gets the file extension
+        if (thisM.node === null) {
+            if (fn === 'mp3' || fn === 'wma' || fn === 'wma' ||
+                fn === 'cda' || fn === 'adx' || fn === 'wm' ||
+                fn === 'm3u' || fn === 'wmx') {
+                thisM.node = new Audio(src);
+                thisM.node.load();
+                var dur = thisM.node.duration;
+                if (isNaN(dur)) {
+                    dur = -1;
+                }
+                Media.onStatus(id, Media.MEDIA_DURATION, dur);
+            }
+            else {
+                lose && lose({code:MediaError.MEDIA_ERR_ABORTED});
+            }
+        }
+    },
+
+    // Start playing the audio
+    startPlayingAudio:function(win, lose, args) {
+        var id = args[0];
+        //var src = args[1];
+        //var options = args[2];
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_RUNNING);
+
+        (Media.get(id)).node.play();
+    },
+
+    // Stops the playing audio
+    stopPlayingAudio:function(win, lose, args) {
+        var id = args[0];
+        try {
+            (Media.get(id)).node.pause();
+            (Media.get(id)).node.currentTime = 0;
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
+            win();
+        } catch (err) {
+            lose("Failed to stop: "+err);
+        }
+    },
+
+    // Seeks to the position in the audio
+    seekToAudio:function(win, lose, args) {
+        var id = args[0];
+        var milliseconds = args[1];
+        try {
+            (Media.get(id)).node.currentTime = milliseconds / 1000;
+            win();
+        } catch (err) {
+            lose("Failed to seek: "+err);
+        }
+    },
+
+    // Pauses the playing audio
+    pausePlayingAudio:function(win, lose, args) {
+        var id = args[0];
+        var thisM = Media.get(id);
+        try {
+            thisM.node.pause();
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_PAUSED);
+        } catch (err) {
+            lose("Failed to pause: "+err);
+        }
+    },
+
+    // Gets current position in the audio
+    getCurrentPositionAudio:function(win, lose, args) {
+        var id = args[0];
+        try {
+            var p = (Media.get(id)).node.currentTime;
+            Media.onStatus(id, Media.MEDIA_POSITION, p);
+            win(p);
+        } catch (err) {
+            lose(err);
+        }
+    },
+
+    // Start recording audio
+    startRecordingAudio:function(win, lose, args) {
+        var id = args[0];
+        var src = args[1];
+        // Initialize device
+        Media.prototype.mediaCaptureMgr = null;
+        var thisM = (Media.get(id));
+        var captureInitSettings = new Windows.Media.Capture.MediaCaptureInitializationSettings();
+        captureInitSettings.streamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.audio;
+        thisM.mediaCaptureMgr = new Windows.Media.Capture.MediaCapture();
+        thisM.mediaCaptureMgr.addEventListener("failed", lose);
+
+        thisM.mediaCaptureMgr.initializeAsync(captureInitSettings).done(function (result) {
+            thisM.mediaCaptureMgr.addEventListener("recordlimitationexceeded", lose);
+            thisM.mediaCaptureMgr.addEventListener("failed", lose);
+        }, lose);
+        // Start recording
+        Windows.Storage.KnownFolders.musicLibrary.createFileAsync(src, Windows.Storage.CreationCollisionOption.replaceExisting).done(function (newFile) {
+            var storageFile = newFile;
+            var fileType = this.src.split('.').pop();
+            var encodingProfile = null;
+            switch (fileType) {
+                case 'm4a':
+                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createM4a(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
+                    break;
+                case 'mp3':
+                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createMp3(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
+                    break;
+                case 'wma':
+                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createWma(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
+                    break;
+                default:
+                    lose("Invalid file type for record");
+                    break;
+            }
+            thisM.mediaCaptureMgr.startRecordToStorageFileAsync(encodingProfile, storageFile).done(win, lose);
+        }, lose);
+    },
+
+    // Stop recording audio
+    stopRecordingAudio:function(win, lose, args) {
+        var id = args[0];
+        var thisM = Media.get(id);
+        thisM.mediaCaptureMgr.stopRecordAsync().done(win, lose);
+    },
+
+    // Release the media object
+    release:function(win, lose, args) {
+        var id = args[0];
+        var thisM = Media.get(id);
+        try {
+            delete thisM.node;
+        } catch (err) {
+            lose("Failed to release: "+err);
+        }
+    },
+    setVolume:function(win, lose, args) {
+        var id = args[0];
+        var volume = args[1];
+        var thisM = Media.get(id);
+        thisM.volume = volume;
+    }
+};
+
+require("cordova/commandProxy").add("Media",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\NetworkStatusProxy.js
+define("cordova/plugin/windows8/NetworkStatusProxy", function(require, exports, module) {
+
+/*global Windows:true */
+
+var cordova = require('cordova');
+var Connection = require('cordova/plugin/Connection');
+
+module.exports = {
+
+    getConnectionInfo:function(win,fail,args)
+    {
+        console.log("NetworkStatusProxy::getConnectionInfo");
+        var winNetConn = Windows.Networking.Connectivity;
+        var networkInfo = winNetConn.NetworkInformation;
+        var networkCostInfo = winNetConn.NetworkCostType;
+        var networkConnectivityInfo = winNetConn.NetworkConnectivityLevel;
+        var networkAuthenticationInfo = winNetConn.NetworkAuthenticationType;
+        var networkEncryptionInfo = winNetConn.NetworkEncryptionType;
+
+        var connectionType;
+
+        var profile = Windows.Networking.Connectivity.NetworkInformation.getInternetConnectionProfile();
+        if(profile) {
+            var conLevel = profile.getNetworkConnectivityLevel();
+            var interfaceType = profile.networkAdapter.ianaInterfaceType;
+
+            if (conLevel == Windows.Networking.Connectivity.NetworkConnectivityLevel.none) {
+                connectionType = Connection.NONE;
+            }
+            else {
+                switch (interfaceType) {
+                    case 71:
+                        connectionType = Connection.WIFI;
+                        break;
+                    case 6:
+                        connectionType = Connection.ETHERNET;
+                        break;
+                    case 243: // (3GPP WWAN) // Fallthrough is intentional
+                    case 244: // (3GPP2 WWAN)
+                         connectionType = Connection.CELL_3G;
+                         break;
+                    default:
+                        connectionType = Connection.UNKNOWN;
+                        break;
+                }
+            }
+        }
+        // FYI
+        //Connection.UNKNOWN  'Unknown connection';
+        //Connection.ETHERNET 'Ethernet connection';
+        //Connection.WIFI     'WiFi connection';
+        //Connection.CELL_2G  'Cell 2G connection';
+        //Connection.CELL_3G  'Cell 3G connection';
+        //Connection.CELL_4G  'Cell 4G connection';
+        //Connection.NONE     'No network connection';
+
+        setTimeout(function () {
+            if (connectionType) {
+                win(connectionType);
+            } else {
+                win(Connection.NONE);
+            }
+        },0);
+    }
+
+};
+
+require("cordova/commandProxy").add("NetworkStatus",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\NotificationProxy.js
+define("cordova/plugin/windows8/NotificationProxy", function(require, exports, module) {
+
+/*global Windows:true */
+
+var cordova = require('cordova');
+
+var isAlertShowing = false;
+var alertStack = [];
+
+module.exports = {
+    alert:function(win, loseX, args) {
+
+        if (isAlertShowing) {
+            var later = function () {
+                module.exports.alert(win, loseX, args);
+            };
+            alertStack.push(later);
+            return;
+        }
+        isAlertShowing = true;
+
+        var message = args[0];
+        var _title = args[1];
+        var _buttonLabel = args[2];
+
+        var md = new Windows.UI.Popups.MessageDialog(message, _title);
+        md.commands.append(new Windows.UI.Popups.UICommand(_buttonLabel));
+        md.showAsync().then(function() {
+            isAlertShowing = false;
+            win && win();
+
+            if (alertStack.length) {
+                setTimeout(alertStack.shift(), 0);
+            }
+
+        });
+    },
+
+    confirm:function(win, loseX, args) {
+
+        if (isAlertShowing) {
+            var later = function () {
+                module.exports.confirm(win, loseX, args);
+            };
+            alertStack.push(later);
+            return;
+        }
+
+        isAlertShowing = true;
+
+        var message = args[0];
+        var _title = args[1];
+        var _buttonLabels = args[2];
+
+        var btnList = [];
+        function commandHandler (command) {
+            win && win(btnList[command.label]);
+        }
+
+        var md = new Windows.UI.Popups.MessageDialog(message, _title);
+        var button = _buttonLabels.split(',');
+
+        for (var i = 0; i<button.length; i++) {
+            btnList[button[i]] = i+1;
+            md.commands.append(new Windows.UI.Popups.UICommand(button[i],commandHandler));
+        }
+        md.showAsync().then(function() {
+            isAlertShowing = false;
+            if (alertStack.length) {
+                setTimeout(alertStack.shift(), 0);
+            }
+
+        });
+    },
+
+    vibrate:function(winX, loseX, args) {
+        var mills = args[0];
+
+        //...
+    },
+
+    beep:function(winX, loseX, args) {
+        var count = args[0];
+        /*
+        var src = //filepath//
+        var playTime = 500; // ms
+        var quietTime = 1000; // ms
+        var media = new Media(src, function(){});
+        var hit = 1;
+        var intervalId = window.setInterval( function () {
+            media.play();
+            sleep(playTime);
+            media.stop();
+            media.seekTo(0);
+            if (hit < count) {
+                hit++;
+            } else {
+                window.clearInterval(intervalId);
+            }
+        }, playTime + quietTime); */
+    }
+};
+
+require("cordova/commandProxy").add("Notification",module.exports);
+});
+
+// file: lib\windows8\plugin\windows8\console.js
+define("cordova/plugin/windows8/console", function(require, exports, module) {
+
+
+if(!console || !console.log)
+{
+    var exec = require('cordova/exec');
+
+    var debugConsole = {
+        log:function(msg){
+            exec(null,null,"DebugConsole","log",msg);
+        },
+        warn:function(msg){
+            exec(null,null,"DebugConsole","warn",msg);
+        },
+        error:function(msg){
+            exec(null,null,"DebugConsole","error",msg);
+        }
+    };
+
+    module.exports = debugConsole;
+}
+else if(console && console.log) {
+
+  console.log("console.log exists already!");
+  console.warn = console.warn || function(msg){console.log("warn:"+msg);};
+  console.error = console.error || function(msg){console.log("error:"+msg);};
+}
+
+});
+
+// file: lib\windows8\plugin\windows8\console\symbols.js
+define("cordova/plugin/windows8/console/symbols", function(require, exports, module) {
+
+
+var modulemapper = require('cordova/modulemapper');
+
+modulemapper.clobbers('cordova/plugin/windows8/console', 'navigator.console');
+
+});
+
+// file: lib\windows8\plugin\windows8\notification\plugininit.js
+define("cordova/plugin/windows8/notification/plugininit", function(require, exports, module) {
+
+window.alert = window.alert || require("cordova/plugin/notification").alert;
+window.confirm = window.confirm || require("cordova/plugin/notification").confirm;
+
 
 });
 
@@ -7018,7 +8030,7 @@ window.cordova = require('cordova');
 
 }(window));
 
-// file: lib\scripts\bootstrap-webos.js
+// file: lib\scripts\bootstrap-windows8.js
 
 require('cordova/channel').onNativeReady.fire();
 

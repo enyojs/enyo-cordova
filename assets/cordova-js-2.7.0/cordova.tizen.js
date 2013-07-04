@@ -1,9 +1,5 @@
-﻿// Platform: windows8
-
-// commit cd29cf0f224ccf25e9d422a33fd02ef67d3a78f4
-
-// File generated at :: Fri Apr 26 2013 15:52:55 GMT-0700 (Pacific Daylight Time)
-
+// Platform: tizen
+// 2.7.0rc1-128-gbab9173
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -22,26 +18,36 @@
  specific language governing permissions and limitations
  under the License.
 */
-
 ;(function() {
-
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-128-gbab9173';
 // file: lib\scripts\require.js
 
 var require,
     define;
 
 (function () {
-    var modules = {};
+    var modules = {},
     // Stack of moduleIds currently being built.
-    var requireStack = [];
+        requireStack = [],
     // Map of module ID -> index into requireStack of modules currently being built.
-    var inProgressModules = {};
+        inProgressModules = {},
+        SEPERATOR = ".";
+
+
 
     function build(module) {
-        var factory = module.factory;
+        var factory = module.factory,
+            localRequire = function (id) {
+                var resultantId = id;
+                //Its a relative path, so lop off the last portion and add the id (minus "./")
+                if (id.charAt(0) === ".") {
+                    resultantId = module.id.slice(0, module.id.lastIndexOf(SEPERATOR)) + SEPERATOR + id.slice(2);
+                }
+                return require(resultantId);
+            };
         module.exports = {};
         delete module.factory;
-        factory(require, module.exports, module);
+        factory(localRequire, module.exports, module);
         return module.exports;
     }
 
@@ -782,11 +788,8 @@ module.exports = {
 };
 });
 
-// file: lib\windows8\exec.js
+// file: lib\tizen\exec.js
 define("cordova/exec", function(require, exports, module) {
-
-var cordova = require('cordova');
-var commandProxy = require('cordova/commandProxy');
 
 /**
  * Execute a cordova command.  It is up to the native side whether this action
@@ -796,32 +799,110 @@ var commandProxy = require('cordova/commandProxy');
  * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
  * depending upon the result of the action.
  *
- * @param {Function} success    The success callback
- * @param {Function} fail       The fail callback
+ * @param {Function} successCB  The success callback
+ * @param {Function} failCB     The fail callback
  * @param {String} service      The name of the service to use
  * @param {String} action       Action to be run in cordova
  * @param {String[]} [args]     Zero or more arguments to pass to the method
  */
-module.exports = function(success, fail, service, action, args) {
+/**
+ * Execute a cordova command.  It is up to the native side whether this action
+ * is synchronous or asynchronous.  The native side can return:
+ *      Synchronous: PluginResult object as a JSON string
+ *      Asynchronous: Empty string ""
+ * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
+ * depending upon the result of the action.
+ *
+ * @param {Function} successCB  The success callback
+ * @param {Function} failCB     The fail callback
+ * @param {String} service      The name of the service to use
+ * @param {String} action       Action to be run in cordova
+ * @param {String[]} [args]     Zero or more arguments to pass to the method
+ */
 
-    var proxy = commandProxy.get(service,action);
-    if(proxy) {
-        var callbackId = service + cordova.callbackId++;
-        // console.log("EXEC:" + service + " : " + action);
-        if (typeof success == "function" || typeof fail == "function") {
-            cordova.callbacks[callbackId] = {success:success, fail:fail};
+//console.log("TIZEN EXEC START");
+
+
+var manager = require('cordova/plugin/tizen/manager'),
+    cordova = require('cordova'),
+    utils = require('cordova/utils');
+
+//console.log("TIZEN EXEC START bis");
+
+module.exports = function(successCB, failCB, service, action, args) {
+
+    try {
+        var v = manager.exec(successCB, failCB, service, action, args);
+
+        // If status is OK, then return value back to caller
+        if (v.status == cordova.callbackStatus.OK) {
+
+            // If there is a success callback, then call it now with returned value
+            if (successCB) {
+                try {
+                    successCB(v.message);
+                }
+                catch (e) {
+                    console.log("Error in success callback: "+ service + "." + action + " = " + e);
+                }
+
+            }
+            return v.message;
+        } else if (v.status == cordova.callbackStatus.NO_RESULT) {
+            // Nothing to do here
+        } else {
+            // If error, then display error
+            console.log("Error: " + service + "." + action + " Status=" + v.status + " Message=" + v.message);
+
+            // If there is a fail callback, then call it now with returned value
+            if (failCB) {
+                try {
+                    failCB(v.message);
+                }
+                catch (e) {
+                    console.log("Error in error callback: " + service + "." + action + " = "+e);
+                }
+            }
+            return null;
         }
-        try {
-            proxy(success, fail, args);
-        }
-        catch(e) {
-            console.log("Exception calling native with command :: " + service + " :: " + action  + " ::exception=" + e);
-        }
-    }
-    else {
-        fail && fail("Missing Command Error");
+    } catch (e) {
+        utils.alert("Error: " + e);
     }
 };
+
+//console.log("TIZEN EXEC END ");
+
+/*
+var plugins = {
+    "Device": require('cordova/plugin/tizen/Device'),
+    "NetworkStatus": require('cordova/plugin/tizen/NetworkStatus'),
+    "Accelerometer": require('cordova/plugin/tizen/Accelerometer'),
+    "Battery": require('cordova/plugin/tizen/Battery'),
+    "Compass": require('cordova/plugin/tizen/Compass'),
+    //"Capture": require('cordova/plugin/tizen/Capture'), not yet available
+    "Camera": require('cordova/plugin/tizen/Camera'),
+    "FileTransfer": require('cordova/plugin/tizen/FileTransfer'),
+    "Media": require('cordova/plugin/tizen/Media'),
+    "Notification": require('cordova/plugin/tizen/Notification')
+};
+
+console.log("TIZEN EXEC START");
+
+module.exports = function(success, fail, service, action, args) {
+    try {
+        console.log("exec: " + service + "." + action);
+        plugins[service][action](success, fail, args);
+    }
+    catch(e) {
+        console.log("missing exec: " + service + "." + action);
+        console.log(args);
+        console.log(e);
+        console.log(e.stack);
+    }
+};
+
+console.log("TIZEN EXEC START");
+*/
 
 });
 
@@ -926,60 +1007,33 @@ exports.reset();
 
 });
 
-// file: lib\windows8\platform.js
+// file: lib\tizen\platform.js
 define("cordova/platform", function(require, exports, module) {
 
-var cordova = require('cordova'),
-    exec = require('cordova/exec'),
-    channel = cordova.require("cordova/channel"),
-    modulemapper = require('cordova/modulemapper');
+//console.log("TIZEN PLATFORM START");
 
-/*
- * Define native implementations ( there is no native layer, so need to make sure the proxies are there )
- */
-modulemapper.loadMatchingModules(/cordova.*\/windows8\/.*Proxy$/);
 
 module.exports = {
-    id: "windows8",
-    initialize:function() {
+    id: "tizen",
+    initialize: function() {
 
-        modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
+        //console.log("TIZEN PLATFORM initialize start");
+
+        var modulemapper = require('cordova/modulemapper');
+
+        //modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
 
         modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
-        modulemapper.clobbers('cordova/commandProxy', 'cordova.commandProxy');
 
         modulemapper.mapModules(window);
 
-        var onWinJSReady = function () {
-            var app = WinJS.Application;
-            var checkpointHandler = function checkpointHandler() {
-                cordova.fireDocumentEvent('pause');
-            };
+        //console.log("TIZEN PLATFORM initialize end");
 
-            var resumingHandler = function resumingHandler() {
-                cordova.fireDocumentEvent('resume');
-            };
-
-            app.addEventListener("checkpoint", checkpointHandler);
-            Windows.UI.WebUI.WebUIApplication.addEventListener("resuming", resumingHandler, false);
-            app.start();
-
-        };
-
-        if (!window.WinJS) {
-            // <script src="//Microsoft.WinJS.1.0/js/base.js"></script>
-            var scriptElem = document.createElement("script");
-            scriptElem.src = "//Microsoft.WinJS.1.0/js/base.js";
-            scriptElem.addEventListener("load", onWinJSReady);
-            document.head.appendChild(scriptElem);
-
-            console.log("added WinJS ... ");
-        }
-        else {
-            onWinJSReady();
-        }
     }
 };
+
+//console.log("TIZEN PLATFORM START");
+
 
 });
 
@@ -1144,8 +1198,6 @@ var CaptureAudioOptions = function(){
     this.limit = 1;
     // Maximum duration of a single sound clip in seconds.
     this.duration = 0;
-    // The selected audio mode. Must match with one of the elements in supportedAudioModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureAudioOptions;
@@ -1186,8 +1238,6 @@ define("cordova/plugin/CaptureImageOptions", function(require, exports, module) 
 var CaptureImageOptions = function(){
     // Upper limit of images user can take. Value must be equal or greater than 1.
     this.limit = 1;
-    // The selected image mode. Must match with one of the elements in supportedImageModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureImageOptions;
@@ -1205,8 +1255,6 @@ var CaptureVideoOptions = function(){
     this.limit = 1;
     // Maximum duration of a single video clip in seconds.
     this.duration = 0;
-    // The selected video mode. Must match with one of the elements in supportedVideoModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureVideoOptions;
@@ -3960,7 +4008,7 @@ module.exports = new Capture();
 
 });
 
-// file: lib\windows8\plugin\capture\symbols.js
+// file: lib\common\plugin\capture\symbols.js
 define("cordova/plugin/capture/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -3969,11 +4017,10 @@ modulemapper.clobbers('cordova/plugin/CaptureError', 'CaptureError');
 modulemapper.clobbers('cordova/plugin/CaptureAudioOptions', 'CaptureAudioOptions');
 modulemapper.clobbers('cordova/plugin/CaptureImageOptions', 'CaptureImageOptions');
 modulemapper.clobbers('cordova/plugin/CaptureVideoOptions', 'CaptureVideoOptions');
+modulemapper.clobbers('cordova/plugin/ConfigurationData', 'ConfigurationData');
 modulemapper.clobbers('cordova/plugin/MediaFile', 'MediaFile');
 modulemapper.clobbers('cordova/plugin/MediaFileData', 'MediaFileData');
 modulemapper.clobbers('cordova/plugin/capture', 'navigator.device.capture');
-
-modulemapper.merges('cordova/plugin/windows8/MediaFile', 'MediaFile');
 
 });
 
@@ -4355,12 +4402,16 @@ function Device() {
 
     channel.onCordovaReady.subscribe(function() {
         me.getInfo(function(info) {
+            var buildLabel = info.cordova;
+            if (buildLabel != CORDOVA_JS_BUILD_LABEL) {
+                buildLabel += ' JS=' + CORDOVA_JS_BUILD_LABEL;
+            }
             me.available = true;
             me.platform = info.platform;
             me.version = info.version;
             me.name = info.name;
             me.uuid = info.uuid;
-            me.cordova = info.cordova;
+            me.cordova = buildLabel;
             me.model = info.model;
             channel.onCordovaInfoReady.fire();
         },function(e) {
@@ -4385,13 +4436,14 @@ module.exports = new Device();
 
 });
 
-// file: lib\common\plugin\device\symbols.js
+// file: lib\tizen\plugin\device\symbols.js
 define("cordova/plugin/device/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/device', 'device');
+modulemapper.clobbers('cordova/plugin/tizen/Device', 'device');
+modulemapper.merges('cordova/plugin/tizen/Device', 'navigator.device');
 
 });
 
@@ -4433,7 +4485,7 @@ module.exports = function(successCallback, errorCallback, message, forceAsync) {
 
 });
 
-// file: lib\windows8\plugin\file\symbols.js
+// file: lib\tizen\plugin\file\symbols.js
 define("cordova/plugin/file/symbols", function(require, exports, module) {
 
 
@@ -4443,6 +4495,7 @@ var modulemapper = require('cordova/modulemapper'),
 symbolshelper(modulemapper.defaults);
 modulemapper.clobbers('cordova/plugin/File', 'File');
 modulemapper.clobbers('cordova/plugin/FileReader', 'FileReader');
+modulemapper.clobbers('cordova/plugin/FileError', 'FileError');
 
 });
 
@@ -5108,9 +5161,12 @@ var exec    = require('cordova/exec');
 var utils   = require('cordova/utils');
 
 var UseConsole   = true;
+var UseLogger    = true;
 var Queued       = [];
 var DeviceReady  = false;
 var CurrentLevel;
+
+var originalConsole = console;
 
 /**
  * Logging levels
@@ -5172,8 +5228,7 @@ logger.level = function (value) {
  * Getter/Setter for the useConsole functionality
  *
  * When useConsole is true, the logger will log via the
- * browser 'console' object.  Otherwise, it will use the
- * native Logger plugin.
+ * browser 'console' object.
  */
 logger.useConsole = function (value) {
     if (arguments.length) UseConsole = !!value;
@@ -5195,6 +5250,18 @@ logger.useConsole = function (value) {
     }
 
     return UseConsole;
+};
+
+/**
+ * Getter/Setter for the useLogger functionality
+ *
+ * When useLogger is true, the logger will log via the
+ * native Logger plugin.
+ */
+logger.useLogger = function (value) {
+    // Enforce boolean
+    if (arguments.length) UseLogger = !!value;
+    return UseLogger;
 };
 
 /**
@@ -5266,24 +5333,26 @@ logger.logLevel = function(level /* , ... */) {
         return;
     }
 
-    // if not using the console, use the native logger
-    if (!UseConsole) {
+    // Log using the native logger if that is enabled
+    if (UseLogger) {
         exec(null, null, "Logger", "logLevel", [level, message]);
-        return;
     }
 
-    // make sure console is not using logger
-    if (console.__usingCordovaLogger) {
-        throw new Error("console and logger are too intertwingly");
-    }
+    // Log using the console if that is enabled
+    if (UseConsole) {
+        // make sure console is not using logger
+        if (console.__usingCordovaLogger) {
+            throw new Error("console and logger are too intertwingly");
+        }
 
-    // log to the console
-    switch (level) {
-        case logger.LOG:   console.log(message); break;
-        case logger.ERROR: console.log("ERROR: " + message); break;
-        case logger.WARN:  console.log("WARN: "  + message); break;
-        case logger.INFO:  console.log("INFO: "  + message); break;
-        case logger.DEBUG: console.log("DEBUG: " + message); break;
+        // log to the console
+        switch (level) {
+            case logger.LOG:   originalConsole.log(message); break;
+            case logger.ERROR: originalConsole.log("ERROR: " + message); break;
+            case logger.WARN:  originalConsole.log("WARN: "  + message); break;
+            case logger.INFO:  originalConsole.log("INFO: "  + message); break;
+            case logger.DEBUG: originalConsole.log("DEBUG: " + message); break;
+        }
     }
 };
 
@@ -5402,14 +5471,15 @@ modulemapper.clobbers('cordova/plugin/logger', 'cordova.logger');
 
 });
 
-// file: lib\windows8\plugin\media\symbols.js
+// file: lib\tizen\plugin\media\symbols.js
 define("cordova/plugin/media/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/Media', 'Media');
-modulemapper.clobbers('cordova/plugin/MediaError', 'MediaError');
+modulemapper.defaults('cordova/plugin/MediaError', 'MediaError');
+modulemapper.merges('cordova/plugin/tizen/MediaError', 'MediaError');
 
 });
 
@@ -5544,7 +5614,7 @@ module.exports = {
         // Some platforms take an array of button label names.
         // Other platforms take a comma separated list.
         // For compatibility, we convert to the desired type based on the platform.
-        if (platform.id == "android" || platform.id == "ios" || platform.id == "windowsphone") {
+        if (platform.id == "android" || platform.id == "ios" || platform.id == "windowsphone" || platform.id == "blackberry10") {
             if (typeof _buttonLabels === 'string') {
                 var buttonLabelString = _buttonLabels;
                 _buttonLabels = _buttonLabels.split(","); // not crazy about changing the var type here
@@ -5568,12 +5638,14 @@ module.exports = {
      * @param {Function} resultCallback     The callback that is called when user clicks on a button.
      * @param {String} title                Title of the dialog (default: "Prompt")
      * @param {Array} buttonLabels          Array of strings for the button labels (default: ["OK","Cancel"])
+     * @param {String} defaultText          Textbox input value (default: "Default text")
      */
-    prompt: function(message, resultCallback, title, buttonLabels) {
+    prompt: function(message, resultCallback, title, buttonLabels, defaultText) {
         var _message = (message || "Prompt message");
         var _title = (title || "Prompt");
         var _buttonLabels = (buttonLabels || ["OK","Cancel"]);
-        exec(resultCallback, null, "Notification", "prompt", [_message, _title, _buttonLabels]);
+        var _defaultText = (defaultText || "Default text");
+        exec(resultCallback, null, "Notification", "prompt", [_message, _title, _buttonLabels, _defaultText]);
     },
 
     /**
@@ -5598,13 +5670,14 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\notification\symbols.js
+// file: lib\tizen\plugin\notification\symbols.js
 define("cordova/plugin/notification/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/notification', 'navigator.notification');
+modulemapper.merges('cordova/plugin/tizen/Notification', 'navigator.notification');
 
 });
 
@@ -5731,2022 +5804,2624 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 
 });
 
-// file: lib\windows8\plugin\windows8\AccelerometerProxy.js
-define("cordova/plugin/windows8/AccelerometerProxy", function(require, exports, module) {
+// file: lib\tizen\plugin\tizen\Accelerometer.js
+define("cordova/plugin/tizen/Accelerometer", function(require, exports, module) {
 
-/*global Windows:true */
+var accelerometerCallback = null;
 
-var cordova = require('cordova'),
-    Acceleration = require('cordova/plugin/Acceleration');
-
-/* This is the actual implementation part that returns the result on Windows 8
-*/
+//console.log("TIZEN ACCELEROMETER START");
 
 module.exports = {
-    onDataChanged:null,
-    start:function(win,lose){
 
-        var accel = Windows.Devices.Sensors.Accelerometer.getDefault();
-        if(!accel) {
-            lose && lose("No accelerometer found");
+    start: function (successCallback, errorCallback) {
+
+        if (accelerometerCallback) {
+            window.removeEventListener("devicemotion", accelerometerCallback, true);
         }
-        else {
-            var self = this;
-            accel.reportInterval = Math.max(16,accel.minimumReportInterval);
 
-            // store our bound function
-            this.onDataChanged = function(e) {
-                var a = e.reading;
-                win(new Acceleration(a.accelerationX,a.accelerationY,a.accelerationZ));
-            };
-            accel.addEventListener("readingchanged",this.onDataChanged);
-
-            setTimeout(function(){
-                var a = accel.getCurrentReading();
-                win(new Acceleration(a.accelerationX,a.accelerationY,a.accelerationZ));
-            },0); // async do later
-        }
+        accelerometerCallback = function (motion) {
+            successCallback({
+                x: motion.accelerationIncludingGravity.x,
+                y: motion.accelerationIncludingGravity.y,
+                z: motion.accelerationIncludingGravity.z,
+                timestamp: new Date().getTime()
+            });
+        };
+        window.addEventListener("devicemotion", accelerometerCallback, true);
     },
-    stop:function(win,lose){
-        win = win || function(){};
-        var accel = Windows.Devices.Sensors.Accelerometer.getDefault();
-        if(!accel) {
-            lose && lose("No accelerometer found");
-        }
-        else {
-            accel.removeEventListener("readingchanged",this.onDataChanged);
-            this.onDataChanged = null;
-            accel.reportInterval = 0; // back to the default
-            win();
-        }
+
+    stop: function (successCallback, errorCallback) {
+        window.removeEventListener("devicemotion", accelerometerCallback, true);
+        accelerometerCallback = null;
     }
 };
 
-require("cordova/commandProxy").add("Accelerometer",module.exports);
+//console.log("TIZEN ACCELEROMETER END");
+
+
 });
 
-// file: lib\windows8\plugin\windows8\CameraProxy.js
-define("cordova/plugin/windows8/CameraProxy", function(require, exports, module) {
+// file: lib\tizen\plugin\tizen\Battery.js
+define("cordova/plugin/tizen/Battery", function(require, exports, module) {
 
-/*global Windows:true, URL:true */
+/*global tizen:false */
+var batteryListenerId = null;
 
-
-var cordova = require('cordova'),
-    Camera = require('cordova/plugin/CameraConstants'),
-    FileEntry = require('cordova/plugin/FileEntry'),
-    FileError = require('cordova/plugin/FileError'),
-    FileReader = require('cordova/plugin/FileReader');
+//console.log("TIZEN BATTERY START");
 
 module.exports = {
-
-    // args will contain :
-    //  ...  it is an array, so be careful
-    // 0 quality:50,
-    // 1 destinationType:Camera.DestinationType.FILE_URI,
-    // 2 sourceType:Camera.PictureSourceType.CAMERA,
-    // 3 targetWidth:-1,
-    // 4 targetHeight:-1,
-    // 5 encodingType:Camera.EncodingType.JPEG,
-    // 6 mediaType:Camera.MediaType.PICTURE,
-    // 7 allowEdit:false,
-    // 8 correctOrientation:false,
-    // 9 saveToPhotoAlbum:false,
-    // 10 popoverOptions:null
-
-    takePicture: function (successCallback, errorCallback, args) {
-        var encodingType = args[5];
-        var targetWidth = args[3];
-        var targetHeight = args[4];
-        var sourceType = args[2];
-        var destinationType = args[1];
-        var mediaType = args[6];
-        var saveToPhotoAlbum = args[9];
-
-        var pkg = Windows.ApplicationModel.Package.current;
-        var packageId = pkg.installedLocation;
-
-        var fail = function (fileError) {
-            errorCallback("FileError, code:" + fileError.code);
-        };
-
-        // resize method :)
-        var resizeImage = function (file) {
-            var tempPhotoFileName = "";
-            if (encodingType == Camera.EncodingType.PNG) {
-                tempPhotoFileName = "camera_cordova_temp_return.png";
-            } else {
-                tempPhotoFileName = "camera_cordova_temp_return.jpg";
+    start: function(successCallback, errorCallback) {
+        var batterySuccessCallback = function(power) {
+            if (successCallback) {
+                successCallback({level: Math.round(power.level * 100), isPlugged: power.isCharging});
             }
-            var imgObj = new Image();
-            var success = function (fileEntry) {
-                var successCB = function (filePhoto) {
-                    var fileType = file.contentType,
-                        reader = new FileReader();
-                    reader.onloadend = function () {
-                        var image = new Image();
-                        image.src = reader.result;
-                        image.onload = function () {
-                            var imageWidth = targetWidth,
-                                imageHeight = targetHeight;
-                            var canvas = document.createElement('canvas');
-
-                            canvas.width = imageWidth;
-                            canvas.height = imageHeight;
-
-                            var ctx = canvas.getContext("2d");
-                            ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
-
-                            // The resized file ready for upload
-                            var _blob = canvas.msToBlob();
-                            var _stream = _blob.msDetachStream();
-                            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                                storageFolder.createFileAsync(tempPhotoFileName, Windows.Storage.CreationCollisionOption.generateUniqueName).done(function (file) {
-                                    file.openAsync(Windows.Storage.FileAccessMode.readWrite).done(function (fileStream) {
-                                        Windows.Storage.Streams.RandomAccessStream.copyAndCloseAsync(_stream, fileStream).done(function () {
-                                            var _imageUrl = URL.createObjectURL(file);
-                                            successCallback(_imageUrl);
-                                        }, function () { errorCallback("Resize picture error."); });
-                                    }, function () { errorCallback("Resize picture error."); });
-                                }, function () { errorCallback("Resize picture error."); });
-                            });
-                        };
-                    };
-
-                    reader.readAsDataURL(filePhoto);
-                };
-
-                var failCB = function () {
-                    errorCallback("File not found.");
-                };
-                fileEntry.file(successCB, failCB);
-            };
-
-            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
-                    success(new FileEntry(storageFile.name, storageFile.path));
-                }, function () {
-                    fail(FileError.INVALID_MODIFICATION_ERR);
-                }, function () {
-                    errorCallback("Folder not access.");
-                });
-            });
-
         };
 
-        // because of asynchronous method, so let the successCallback be called in it.
-        var resizeImageBase64 = function (file) {
-            var imgObj = new Image();
-            var success = function (fileEntry) {
-                var successCB = function (filePhoto) {
-                    var fileType = file.contentType,
-                        reader = new FileReader();
-                    reader.onloadend = function () {
-                        var image = new Image();
-                        image.src = reader.result;
-
-                        image.onload = function () {
-                            var imageWidth = targetWidth,
-                                imageHeight = targetHeight;
-                            var canvas = document.createElement('canvas');
-
-                            canvas.width = imageWidth;
-                            canvas.height = imageHeight;
-
-                            var ctx = canvas.getContext("2d");
-                            ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
-
-                            // The resized file ready for upload
-                            var finalFile = canvas.toDataURL(fileType);
-
-                            // Remove the prefix such as "data:" + contentType + ";base64," , in order to meet the Cordova API.
-                            var arr = finalFile.split(",");
-                            var newStr = finalFile.substr(arr[0].length + 1);
-                            successCallback(newStr);
-                        };
-                    };
-
-                    reader.readAsDataURL(filePhoto);
-
-                };
-                var failCB = function () {
-                    errorCallback("File not found.");
-                };
-                fileEntry.file(successCB, failCB);
-            };
-
-            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
-                    success(new FileEntry(storageFile.name, storageFile.path));
-                }, function () {
-                    fail(FileError.INVALID_MODIFICATION_ERR);
-                }, function () {
-                    errorCallback("Folder not access.");
-                });
-            });
-
-        };
-
-        if (sourceType != Camera.PictureSourceType.CAMERA) {
-            var fileOpenPicker = new Windows.Storage.Pickers.FileOpenPicker();
-            fileOpenPicker.suggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.picturesLibrary;
-            if (mediaType == Camera.MediaType.PICTURE) {
-                fileOpenPicker.fileTypeFilter.replaceAll([".png", ".jpg", ".jpeg"]);
-            } else if (mediaType == Camera.MediaType.VIDEO) {
-                fileOpenPicker.fileTypeFilter.replaceAll([".avi", ".flv", ".asx", ".asf", ".mov", ".mp4", ".mpg", ".rm", ".srt", ".swf", ".wmv", ".vob"]);
-            } else {
-                fileOpenPicker.fileTypeFilter.replaceAll(["*"]);
-            }
-
-            fileOpenPicker.pickSingleFileAsync().then(function (file) {
-                if (file) {
-                    if (destinationType == Camera.DestinationType.FILE_URI) {
-                        if (targetHeight > 0 && targetWidth > 0) {
-                            resizeImage(file);
-                        } else {
-                            Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
-                                    var _imageUrl = URL.createObjectURL(storageFile);
-                                    successCallback(_imageUrl);
-                                }, function () {
-                                    fail(FileError.INVALID_MODIFICATION_ERR);
-                                }, function () {
-                                    errorCallback("Folder not access.");
-                                });
-                            });
-
-                        }
-                    }
-                    else {
-                        if (targetHeight > 0 && targetWidth > 0) {
-                            resizeImageBase64(file);
-                        } else {
-                            Windows.Storage.FileIO.readBufferAsync(file).done(function (buffer) {
-                                var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
-                                successCallback(strBase64);
-                            });
-                        }
-
-                    }
-
-                } else {
-                    errorCallback("User didn't choose a file.");
-                }
-            }, function () {
-                errorCallback("User didn't choose a file.");
-            });
+        if (batteryListenerId === null) {
+            batteryListenerId = tizen.systeminfo.addPropertyValueChangeListener("BATTERY", batterySuccessCallback);
         }
-        else {
 
-            var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
-            cameraCaptureUI.photoSettings.allowCropping = true;
-            var allowCrop = !!args[7];
-            if (!allowCrop) {
-                cameraCaptureUI.photoSettings.allowCropping = false;
-            }
+        tizen.systeminfo.getPropertyValue("BATTERY", batterySuccessCallback, errorCallback);
+    },
 
-            if (encodingType == Camera.EncodingType.PNG) {
-                cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.png;
-            } else {
-                cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.jpeg;
-            }
-            // decide which max pixels should be supported by targetWidth or targetHeight.
-            if (targetWidth >= 1280 || targetHeight >= 960) {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.large3M;
-            } else if (targetWidth >= 1024 || targetHeight >= 768) {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.mediumXga;
-            } else if (targetWidth >= 800 || targetHeight >= 600) {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.mediumXga;
-            } else if (targetWidth >= 640 || targetHeight >= 480) {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.smallVga;
-            } else if (targetWidth >= 320 || targetHeight >= 240) {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.verySmallQvga;
-            } else {
-                cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.highestAvailable;
-            }
-
-            cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.photo).then(function (picture) {
-                if (picture) {
-                    // save to photo album successCallback
-                    var success = function (fileEntry) {
-                        if (destinationType == Camera.DestinationType.FILE_URI) {
-                            if (targetHeight > 0 && targetWidth > 0) {
-                                resizeImage(picture);
-                            } else {
-                                Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                                    picture.copyAsync(storageFolder, picture.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
-                                        var _imageUrl = URL.createObjectURL(storageFile);
-                                        successCallback(_imageUrl);
-                                    }, function () {
-                                        fail(FileError.INVALID_MODIFICATION_ERR);
-                                    }, function () {
-                                        errorCallback("Folder not access.");
-                                    });
-                                });
-                            }
-                        } else {
-                            if (targetHeight > 0 && targetWidth > 0) {
-                                resizeImageBase64(picture);
-                            } else {
-                                Windows.Storage.FileIO.readBufferAsync(picture).done(function (buffer) {
-                                    var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
-                                    successCallback(strBase64);
-                                });
-                            }
-                        }
-                    };
-                    // save to photo album errorCallback
-                    var fail = function () {
-                        //errorCallback("FileError, code:" + fileError.code);
-                        errorCallback("Save fail.");
-                    };
-
-                    if (saveToPhotoAlbum) {
-                        Windows.Storage.StorageFile.getFileFromPathAsync(picture.path).then(function (storageFile) {
-                            storageFile.copyAsync(Windows.Storage.KnownFolders.picturesLibrary, picture.name, Windows.Storage.NameCollisionOption.generateUniqueName).then(function (storageFile) {
-                                success(storageFile);
-                            }, function () {
-                                fail();
-                            });
-                        });
-                        //var directory = new DirectoryEntry("Pictures", parentPath);
-                        //new FileEntry(picture.name, picture.path).copyTo(directory, null, success, fail);
-                    } else {
-                        if (destinationType == Camera.DestinationType.FILE_URI) {
-                            if (targetHeight > 0 && targetWidth > 0) {
-                                resizeImage(picture);
-                            } else {
-                                Windows.Storage.StorageFolder.getFolderFromPathAsync(packageId.path).done(function (storageFolder) {
-                                    picture.copyAsync(storageFolder, picture.name, Windows.Storage.NameCollisionOption.replaceExisting).then(function (storageFile) {
-                                        var _imageUrl = URL.createObjectURL(storageFile);
-                                        successCallback(_imageUrl);
-                                    }, function () {
-                                        fail(FileError.INVALID_MODIFICATION_ERR);
-                                    }, function () {
-                                        errorCallback("Folder not access.");
-                                    });
-                                });
-                            }
-                        } else {
-                            if (targetHeight > 0 && targetWidth > 0) {
-                                resizeImageBase64(picture);
-                            } else {
-                                Windows.Storage.FileIO.readBufferAsync(picture).done(function (buffer) {
-                                    var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
-                                    successCallback(strBase64);
-                                });
-                            }
-                        }
-                    }
-                } else {
-                    errorCallback("User didn't capture a photo.");
-                }
-            }, function () {
-                errorCallback("Fail to capture a photo.");
-            });
-        }
+    stop: function(successCallback, errorCallback) {
+        tizen.systeminfo.removePropertyValueChangeListener(batteryListenerId);
+        batteryListenerId = null;
     }
 };
 
-require("cordova/commandProxy").add("Camera",module.exports);
+//console.log("TIZEN BATTERY END");
 
 });
 
-// file: lib\windows8\plugin\windows8\CaptureProxy.js
-define("cordova/plugin/windows8/CaptureProxy", function(require, exports, module) {
+// file: lib\tizen\plugin\tizen\BufferLoader.js
+define("cordova/plugin/tizen/BufferLoader", function(require, exports, module) {
 
-/*global Windows:true */
+/*
+ * Buffer Loader Object
+ * This class provides a sound buffer for one or more sounds
+ * held in a local file located by an url
+ *
+ * uses W3C  Web Audio API
+ *
+ * @constructor
+ *
+ * @param {AudioContext} audio context object
+ * @param {Array} urlList, array of url for sound to load
+ * @param {function} callback , called after buffer was loaded
+ *
+ */
 
-var MediaFile = require('cordova/plugin/MediaFile');
-var CaptureError = require('cordova/plugin/CaptureError');
-var CaptureAudioOptions = require('cordova/plugin/CaptureAudioOptions');
-var CaptureImageOptions = require('cordova/plugin/CaptureImageOptions');
-var CaptureVideoOptions = require('cordova/plugin/CaptureVideoOptions');
-var MediaFileData = require('cordova/plugin/MediaFileData');
+function BufferLoader(context, urlList, callback) {
+    this.context = context;
+    this.urlList = urlList;
+    this.onload = callback;
+    this.bufferList = [];
+    this.loadCount = 0;
+}
 
-module.exports = {
+/*
+ * This method loads a sound into a buffer
+ * @param {Array} urlList, array of url for sound to load
+ * @param {Number} index, buffer index in the array where to load the url sound
+ *
+ */
 
-    captureAudio:function(successCallback, errorCallback, args) {
-        var options = args[0];
+BufferLoader.prototype.loadBuffer = function(url, index) {
+    // Load buffer asynchronously
+    var request = null,
+        loader = null;
 
-        var audioOptions = new CaptureAudioOptions();
-        if (typeof(options.duration) == 'undefined') {
-            audioOptions.duration = 3600; // Arbitrary amount, need to change later
-        } else if (options.duration > 0) {
-            audioOptions.duration = options.duration;
-        } else {
-            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-            return;
-        }
+    request = new XMLHttpRequest();
 
-        var cameraCaptureAudioDuration = audioOptions.duration;
-        var mediaCaptureSettings;
-        var initCaptureSettings = function () {
-            mediaCaptureSettings = null;
-            mediaCaptureSettings = new Windows.Media.Capture.MediaCaptureInitializationSettings();
-            mediaCaptureSettings.streamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.audio;
-        };
-
-        initCaptureSettings();
-        var mediaCapture = new Windows.Media.Capture.MediaCapture();
-        mediaCapture.initializeAsync(mediaCaptureSettings).done(function () {
-            Windows.Storage.KnownFolders.musicLibrary.createFileAsync("captureAudio.mp3", Windows.Storage.NameCollisionOption.generateUniqueName).then(function (storageFile) {
-                var mediaEncodingProfile = new Windows.Media.MediaProperties.MediaEncodingProfile.createMp3(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
-                var stopRecord = function () {
-                    mediaCapture.stopRecordAsync().then(function (result) {
-                        storageFile.getBasicPropertiesAsync().then(function (basicProperties) {
-                            var results = [];
-                            results.push(new MediaFile(storageFile.name, storageFile.path, storageFile.contentType, basicProperties.dateModified, basicProperties.size));
-                            successCallback(results);
-                        }, function () {
-                            errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
-                        });
-                    }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
-                };
-                mediaCapture.startRecordToStorageFileAsync(mediaEncodingProfile, storageFile).then(function () {
-                    setTimeout(stopRecord, cameraCaptureAudioDuration * 1000);
-                }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
-            }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
-        });
-    },
-
-    captureImage:function (successCallback, errorCallback, args) {
-        var options = args[0];
-        var imageOptions = new CaptureImageOptions();
-        var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
-        cameraCaptureUI.photoSettings.allowCropping = true;
-        cameraCaptureUI.photoSettings.maxResolution = Windows.Media.Capture.CameraCaptureUIMaxPhotoResolution.highestAvailable;
-        cameraCaptureUI.photoSettings.format = Windows.Media.Capture.CameraCaptureUIPhotoFormat.jpeg;
-        cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.photo).then(function (file) {
-            file.moveAsync(Windows.Storage.KnownFolders.picturesLibrary, "cameraCaptureImage.jpg", Windows.Storage.NameCollisionOption.generateUniqueName).then(function () {
-                file.getBasicPropertiesAsync().then(function (basicProperties) {
-                    var results = [];
-                    results.push(new MediaFile(file.name, file.path, file.contentType, basicProperties.dateModified, basicProperties.size));
-                    successCallback(results);
-                }, function () {
-                    errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
-                });
-            }, function () {
-                errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
-            });
-        }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
-    },
-
-    captureVideo:function (successCallback, errorCallback, args) {
-        var options = args[0];
-        var videoOptions = new CaptureVideoOptions();
-        if (options.duration && options.duration > 0) {
-            videoOptions.duration = options.duration;
-        }
-        if (options.limit > 1) {
-            videoOptions.limit = options.limit;
-        }
-        var cameraCaptureUI = new Windows.Media.Capture.CameraCaptureUI();
-        cameraCaptureUI.videoSettings.allowTrimming = true;
-        cameraCaptureUI.videoSettings.format = Windows.Media.Capture.CameraCaptureUIVideoFormat.mp4;
-        cameraCaptureUI.videoSettings.maxDurationInSeconds = videoOptions.duration;
-        cameraCaptureUI.captureFileAsync(Windows.Media.Capture.CameraCaptureUIMode.video).then(function (file) {
-            file.moveAsync(Windows.Storage.KnownFolders.videosLibrary, "cameraCaptureVedio.mp4", Windows.Storage.NameCollisionOption.generateUniqueName).then(function () {
-                file.getBasicPropertiesAsync().then(function (basicProperties) {
-                    var results = [];
-                    results.push(new MediaFile(file.name, file.path, file.contentType, basicProperties.dateModified, basicProperties.size));
-                    successCallback(results);
-                }, function () {
-                    errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
-                });
-            }, function () {
-                errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES));
-            });
-        }, function () { errorCallback(new CaptureError(CaptureError.CAPTURE_NO_MEDIA_FILES)); });
-
-    },
-
-    getFormatData: function (successCallback, errorCallback, args) {
-        Windows.Storage.StorageFile.getFileFromPathAsync(args[0]).then(
-            function (storageFile) {
-                var mediaTypeFlag = String(storageFile.contentType).split("/")[0].toLowerCase();
-                if (mediaTypeFlag === "audio") {
-                    storageFile.properties.getMusicPropertiesAsync().then(function (audioProperties) {
-                        successCallback(new MediaFileData(null, audioProperties.bitrate, 0, 0, audioProperties.duration / 1000));
-                    }, function () {
-                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                    });
-                }
-                else if (mediaTypeFlag === "video") {
-                    storageFile.properties.getVideoPropertiesAsync().then(function (videoProperties) {
-                        successCallback(new MediaFileData(null, videoProperties.bitrate, videoProperties.height, videoProperties.width, videoProperties.duration / 1000));
-                    }, function () {
-                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                    });
-                }
-                else if (mediaTypeFlag === "image") {
-                    storageFile.properties.getImagePropertiesAsync().then(function (imageProperties) {
-                        successCallback(new MediaFileData(null, 0, imageProperties.height, imageProperties.width, 0));
-                    }, function () {
-                        errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                    });
-                }
-                else { errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT)); }
-            }, function () {
-                errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-            }
-        );
-    }
-};
-
-require("cordova/commandProxy").add("Capture",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\CompassProxy.js
-define("cordova/plugin/windows8/CompassProxy", function(require, exports, module) {
-
-/*global Windows:true */
-
-var cordova = require('cordova'),
-    CompassHeading = require('cordova/plugin/CompassHeading');
-
-
-module.exports = {
-
-    onReadingChanged:null,
-    getHeading:function(win,lose) {
-        var deviceCompass = Windows.Devices.Sensors.Compass.getDefault();
-        if(!deviceCompass) {
-            setTimeout(function(){lose("Compass not available");},0);
-        }
-        else {
-
-            deviceCompass.reportInterval = Math.max(16,deviceCompass.minimumReportInterval);
-
-            this.onReadingChanged = function(e) {
-                var reading = e.reading;
-                var heading = new CompassHeading(reading.headingMagneticNorth, reading.headingTrueNorth);
-                win(heading);
-            };
-            deviceCompass.addEventListener("readingchanged",this.onReadingChanged);
-        }
-
-    },
-    stopHeading:function(win,lose) {
-        var deviceCompass = Windows.Devices.Sensors.Compass.getDefault();
-        if(!deviceCompass) {
-            setTimeout(function(){lose("Compass not available");},0);
-        }
-        else {
-
-            deviceCompass.removeEventListener("readingchanged",this.onReadingChanged);
-            this.onReadingChanged = null;
-            deviceCompass.reportInterval = 0;
-            win();
-        }
-
-    }
-};
-
-require("cordova/commandProxy").add("Compass",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\ContactsProxy.js
-define("cordova/plugin/windows8/ContactsProxy", function(require, exports, module) {
-
-var cordova = require('cordova');
-
-module.exports = {
-    search: function (win, fail, args) {
-        var fields = args[0];
-        var options = args[1];
-        var picker = Windows.ApplicationModel.Contacts.ContactPicker();
-        picker.commitButtonText = "Select";
-        picker.selectionMode = Windows.ApplicationModel.Contacts.ContactSelectionMode.contacts;
-
-        picker.desiredFields.push.apply(picker.desiredFields, fields);
-
-        if (options.multiple) {
-            picker.pickMultipleContactsAsync().then(function (contacts) {
-                win(contacts);
-            });
-        }
-        else {
-            picker.pickSingleContactAsync().then(function (contact) {
-                win([contact]);
-            });
-        }
+    if (request === null) {
+        console.log ("BufferLoader.prototype.loadBuffer, cannot allocate XML http request");
+        return;
     }
 
-};
+    request.open("GET", url, true);
+    request.responseType = "arraybuffer";
 
-require("cordova/commandProxy").add("Contacts",module.exports);
-});
+    loader = this;
 
-// file: lib\windows8\plugin\windows8\DeviceProxy.js
-define("cordova/plugin/windows8/DeviceProxy", function(require, exports, module) {
-
-var cordova = require('cordova');
-var utils = require('cordova/utils');
-var FileError = require('cordova/plugin/FileError');
-
-
-module.exports = {
-
-    getDeviceInfo:function(win,fail,args) {
-        //console.log("NativeProxy::getDeviceInfo");
-        var hostNames = Windows.Networking.Connectivity.NetworkInformation.getHostNames();
-
-        var name = "unknown";
-        hostNames.some(function (nm) {
-            if (nm.displayName.indexOf(".local") > -1) {
-                name = nm.displayName.split(".local")[0];
-                return true;
-            }
-        });
-
-        // deviceId aka uuid, stored in Windows.Storage.ApplicationData.current.localSettings.values.deviceId
-        var deviceId;
-        var localSettings = Windows.Storage.ApplicationData.current.localSettings;
-
-        if (localSettings.values.deviceId) {
-            deviceId = localSettings.values.deviceId;
-        }
-        else {
-            deviceId = localSettings.values.deviceId = utils.createUUID();
-        }
-
-        setTimeout(function () {
-            win({ platform: "windows8", version: "8", name: name, uuid: deviceId, cordova: "2.7.0" });
-        }, 0);
-    }
-
-};
-
-require("cordova/commandProxy").add("Device",module.exports);
-
-});
-
-// file: lib\windows8\plugin\windows8\FileProxy.js
-define("cordova/plugin/windows8/FileProxy", function(require, exports, module) {
-
-var cordova = require('cordova');
-var Entry = require('cordova/plugin/Entry'),
-    File = require('cordova/plugin/File'),
-    FileEntry = require('cordova/plugin/FileEntry'),
-    FileError = require('cordova/plugin/FileError'),
-    DirectoryEntry = require('cordova/plugin/DirectoryEntry'),
-    Flags = require('cordova/plugin/Flags'),
-    FileSystem = require('cordova/plugin/FileSystem'),
-    LocalFileSystem = require('cordova/plugin/LocalFileSystem');
-
-module.exports = {
-
-    getFileMetadata:function(win,fail,args) {
-        var fullPath = args[0];
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).done(
-            function (storageFile) {
-                storageFile.getBasicPropertiesAsync().then(
-                    function (basicProperties) {
-                        win(new File(storageFile.name, storageFile.path, storageFile.fileType, basicProperties.dateModified, basicProperties.size));
-                    }, function () {
-                        fail && fail(FileError.NOT_READABLE_ERR);
-                    }
-                );
-            }, function () {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    getMetadata:function(success,fail,args) {
-        var fullPath = args[0];
-
-        var dealFile = function (sFile) {
-            Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
-                function (storageFile) {
-                    return storageFile.getBasicPropertiesAsync();
-                },
-                function () {
-                    fail && fail(FileError.NOT_READABLE_ERR);
-                }
-            // get the basic properties of the file.
-            ).then(
-                function (basicProperties) {
-                    success(basicProperties.dateModified);
-                },
-                function () {
-                    fail && fail(FileError.NOT_READABLE_ERR);
-                }
-            );
-        };
-
-        var dealFolder = function (sFolder) {
-            Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-                function (storageFolder) {
-                    return storageFolder.getBasicPropertiesAsync();
-                },
-                function () {
-                    fail && fail(FileError.NOT_READABLE_ERR);
-                }
-            // get the basic properties of the folder.
-            ).then(
-                function (basicProperties) {
-                    success(basicProperties.dateModified);
-                },
-                function () {
-                    fail && fail(FileError.NOT_FOUND_ERR);
-                }
-            );
-        };
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
-            // the path is file.
-            function (sFile) {
-                dealFile(sFile);
-            },
-            // the path is folder
-            function () {
-                Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-                    function (sFolder) {
-                        dealFolder(sFolder);
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }
-                );
-            }
-        );
-    },
-
-    getParent:function(win,fail,args) { // ["fullPath"]
-        var fullPath = args[0];
-
-        var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
-        var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
-
-        if (fullPath == storageFolderPer.path) {
-            win(new DirectoryEntry(storageFolderPer.name, storageFolderPer.path));
-            return;
-        } else if (fullPath == storageFolderTem.path) {
-            win(new DirectoryEntry(storageFolderTem.name, storageFolderTem.path));
-            return;
-        }
-        var splitArr = fullPath.split(new RegExp(/\/|\\/g));
-
-        var popItem = splitArr.pop();
-
-        var result = new DirectoryEntry(popItem, fullPath.substr(0, fullPath.length - popItem.length - 1));
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(result.fullPath).done(
-            function () { win(result); },
-            function () { fail && fail(FileError.INVALID_STATE_ERR); }
-        );
-    },
-
-    readAsText:function(win,fail,args) {
-        var fileName = args[0];
-        var enc = args[1];
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(
-            function (storageFile) {
-                var value = Windows.Storage.Streams.UnicodeEncoding.utf8;
-                if (enc == 'Utf16LE' || enc == 'utf16LE') {
-                    value = Windows.Storage.Streams.UnicodeEncoding.utf16LE;
-                }else if (enc == 'Utf16BE' || enc == 'utf16BE') {
-                    value = Windows.Storage.Streams.UnicodeEncoding.utf16BE;
-                }
-                Windows.Storage.FileIO.readTextAsync(storageFile, value).done(
-                    function (fileContent) {
-                        win(fileContent);
-                    },
-                    function () {
-                        fail && fail(FileError.ENCODING_ERR);
-                    }
-                );
-            }, function () {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    readAsDataURL:function(win,fail,args) {
-        var fileName = args[0];
-
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).then(
-            function (storageFile) {
-                Windows.Storage.FileIO.readBufferAsync(storageFile).done(
-                    function (buffer) {
-                        var strBase64 = Windows.Security.Cryptography.CryptographicBuffer.encodeToBase64String(buffer);
-                        //the method encodeToBase64String will add "77u/" as a prefix, so we should remove it
-                        if(String(strBase64).substr(0,4) == "77u/") {
-                            strBase64 = strBase64.substr(4);
-                        }
-                        var mediaType = storageFile.contentType;
-                        var result = "data:" + mediaType + ";base64," + strBase64;
-                        win(result);
-                    }
-                );
-            }, function () {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    getDirectory:function(win,fail,args) {
-        var fullPath = args[0];
-        var path = args[1];
-        var options = args[2];
-
-        var flag = "";
-        if (options !== null) {
-            flag = new Flags(options.create, options.exclusive);
-        } else {
-            flag = new Flags(false, false);
-        }
-
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-            function (storageFolder) {
-                if (flag.create === true && flag.exclusive === true) {
-                    storageFolder.createFolderAsync(path, Windows.Storage.CreationCollisionOption.failIfExists).done(
-                        function (storageFolder) {
-                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                        }, function () {
-                            fail && fail(FileError.PATH_EXISTS_ERR);
-                        }
-                    );
-                } else if (flag.create === true && flag.exclusive === false) {
-                    storageFolder.createFolderAsync(path, Windows.Storage.CreationCollisionOption.openIfExists).done(
-                        function (storageFolder) {
-                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                        }, function () {
-                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                        }
-                    );
-                } else if (flag.create === false) {
-                    if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(path)) {
-                        fail && fail(FileError.ENCODING_ERR);
-                        return;
-                    }
-
-                    storageFolder.getFolderAsync(path).done(
-                        function (storageFolder) {
-                            win(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                        }, function () {
-                            fail && fail(FileError.NOT_FOUND_ERR);
-                        }
-                    );
-                }
-            }, function () {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    remove:function(win,fail,args) {
-        var fullPath = args[0];
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).then(
-            function (sFile) {
-                Windows.Storage.StorageFile.getFileFromPathAsync(fullPath).done(function (storageFile) {
-                    storageFile.deleteAsync().done(win, function () {
-                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-
-                    });
-                });
-            },
-            function () {
-                Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-                    function (sFolder) {
-                        var removeEntry = function () {
-                            var storageFolderTop = null;
-
-                            Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-                                function (storageFolder) {
-                                    // FileSystem root can't be removed!
-                                    var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
-                                    var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
-                                    if (fullPath == storageFolderPer.path || fullPath == storageFolderTem.path) {
-                                        fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
-                                        return;
-                                    }
-                                    storageFolderTop = storageFolder;
-                                    return storageFolder.createFileQuery().getFilesAsync();
-                                }, function () {
-                                    fail && fail(FileError.INVALID_MODIFICATION_ERR);
-
-                                }
-                            // check sub-files.
-                            ).then(function (fileList) {
-                                if (fileList) {
-                                    if (fileList.length === 0) {
-                                        return storageFolderTop.createFolderQuery().getFoldersAsync();
-                                    } else {
-                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                    }
-                                }
-                            // check sub-folders.
-                            }).then(function (folderList) {
-                                if (folderList) {
-                                    if (folderList.length === 0) {
-                                        storageFolderTop.deleteAsync().done(win, function () {
-                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-
-                                        });
-                                    } else {
-                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                    }
-                                }
-
-                            });
-                        };
-                        removeEntry();
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }
-                );
-            }
-        );
-    },
-
-    removeRecursively:function(successCallback,fail,args) {
-        var fullPath = args[0];
-
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).done(function (storageFolder) {
-        var storageFolderPer = Windows.Storage.ApplicationData.current.localFolder;
-        var storageFolderTem = Windows.Storage.ApplicationData.current.temporaryFolder;
-
-        if (storageFolder.path == storageFolderPer.path || storageFolder.path == storageFolderTem.path) {
-            fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
-            return;
-        }
-
-        var removeFolders = function (path) {
-            return new WinJS.Promise(function (complete) {
-                var filePromiseArr = [];
-                var storageFolderTop = null;
-                Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
-                    function (storageFolder) {
-                        var fileListPromise = storageFolder.createFileQuery().getFilesAsync();
-
-                        storageFolderTop = storageFolder;
-                        return fileListPromise;
-                    }
-                // remove all the files directly under the folder.
-                ).then(function (fileList) {
-                    if (fileList !== null) {
-                        for (var i = 0; i < fileList.length; i++) {
-                            var filePromise = fileList[i].deleteAsync();
-                            filePromiseArr.push(filePromise);
-                        }
-                    }
-                    WinJS.Promise.join(filePromiseArr).then(function () {
-                        var folderListPromise = storageFolderTop.createFolderQuery().getFoldersAsync();
-                        return folderListPromise;
-                    // remove empty folders.
-                    }).then(function (folderList) {
-                        var folderPromiseArr = [];
-                        if (folderList.length !== 0) {
-                            for (var j = 0; j < folderList.length; j++) {
-
-                                folderPromiseArr.push(removeFolders(folderList[j].path));
-                            }
-                            WinJS.Promise.join(folderPromiseArr).then(function () {
-                                storageFolderTop.deleteAsync().then(complete);
-                            });
-                        } else {
-                            storageFolderTop.deleteAsync().then(complete);
-                        }
-                    }, function () { });
-                }, function () { });
-            });
-        };
-        removeFolders(storageFolder.path).then(function () {
-            Windows.Storage.StorageFolder.getFolderFromPathAsync(storageFolder.path).then(
-                function () {},
-                function () {
-                    if (typeof successCallback !== 'undefined' && successCallback !== null) { successCallback(); }
-                });
-            });
-        });
-    },
-
-    getFile:function(win,fail,args) {
-        var fullPath = args[0];
-        var path = args[1];
-        var options = args[2];
-
-        var flag = "";
-        if (options !== null) {
-            flag = new Flags(options.create, options.exclusive);
-        } else {
-            flag = new Flags(false, false);
-        }
-
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(fullPath).then(
-            function (storageFolder) {
-                if (flag.create === true && flag.exclusive === true) {
-                    storageFolder.createFileAsync(path, Windows.Storage.CreationCollisionOption.failIfExists).done(
-                        function (storageFile) {
-                            win(new FileEntry(storageFile.name, storageFile.path));
-                        }, function () {
-                            fail && fail(FileError.PATH_EXISTS_ERR);
-                        }
-                    );
-                } else if (flag.create === true && flag.exclusive === false) {
-                    storageFolder.createFileAsync(path, Windows.Storage.CreationCollisionOption.openIfExists).done(
-                        function (storageFile) {
-                            win(new FileEntry(storageFile.name, storageFile.path));
-                        }, function () {
-                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                        }
-                    );
-                } else if (flag.create === false) {
-                    if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(path)) {
-                        fail && fail(FileError.ENCODING_ERR);
-                        return;
-                    }
-                    storageFolder.getFileAsync(path).done(
-                        function (storageFile) {
-                            win(new FileEntry(storageFile.name, storageFile.path));
-                        }, function () {
-                            fail && fail(FileError.NOT_FOUND_ERR);
-                        }
-                    );
-                }
-            }, function () {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    readEntries:function(win,fail,args) { // ["fullPath"]
-        var path = args[0];
-
-        var result = [];
-
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(function (storageFolder) {
-            var promiseArr = [];
-            var index = 0;
-            promiseArr[index++] = storageFolder.createFileQuery().getFilesAsync().then(function (fileList) {
-                if (fileList !== null) {
-                    for (var i = 0; i < fileList.length; i++) {
-                        result.push(new FileEntry(fileList[i].name, fileList[i].path));
-                    }
-                }
-            });
-            promiseArr[index++] = storageFolder.createFolderQuery().getFoldersAsync().then(function (folderList) {
-                if (folderList !== null) {
-                    for (var j = 0; j < folderList.length; j++) {
-                        result.push(new FileEntry(folderList[j].name, folderList[j].path));
-                    }
-                }
-            });
-            WinJS.Promise.join(promiseArr).then(function () {
-                win(result);
-            });
-
-        }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
-    },
-
-    write:function(win,fail,args) {
-        var fileName = args[0];
-        var text = args[1];
-        var position = args[2];
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(
-            function (storageFile) {
-                Windows.Storage.FileIO.writeTextAsync(storageFile,text,Windows.Storage.Streams.UnicodeEncoding.utf8).done(
-                    function() {
-                        win(String(text).length);
-                    }, function () {
-                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                    }
-                );
-            }, function() {
-                fail && fail(FileError.NOT_FOUND_ERR);
-            }
-        );
-    },
-
-    truncate:function(win,fail,args) { // ["fileName","size"]
-        var fileName = args[0];
-        var size = args[1];
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(fileName).done(function(storageFile){
-            //the current length of the file.
-            var leng = 0;
-
-            storageFile.getBasicPropertiesAsync().then(function (basicProperties) {
-                leng = basicProperties.size;
-                if (Number(size) >= leng) {
-                    win(this.length);
+    request.onload = function() {
+    // Asynchronously decode the audio file data in request.response
+    loader.context.decodeAudioData(
+        request.response,
+        function(buffer) {
+                if (!buffer) {
+                    console.log ("BufferLoader.prototype.loadBuffer,error decoding file data: " + url);
                     return;
                 }
-                if (Number(size) >= 0) {
-                    Windows.Storage.FileIO.readTextAsync(storageFile, Windows.Storage.Streams.UnicodeEncoding.utf8).then(function (fileContent) {
-                        fileContent = fileContent.substr(0, size);
-                        var fullPath = storageFile.path;
-                        var name = storageFile.name;
-                        var entry = new Entry(true, false, name, fullPath);
-                        var parentPath = "";
-                        var successCallBack = function (entry) {
-                            parentPath = entry.fullPath;
-                            storageFile.deleteAsync().then(function () {
-                                return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
-                            }).then(function (storageFolder) {
-                                storageFolder.createFileAsync(name).then(function (newStorageFile) {
-                                    Windows.Storage.FileIO.writeTextAsync(newStorageFile, fileContent).done(function () {
-                                        win(String(fileContent).length);
-                                    }, function () {
-                                        fail && fail(FileError.NO_MODIFICATION_ALLOWED_ERR);
-                                    });
-                                });
-                            });
-                        };
-                        entry.getParent(successCallBack, null);
-                    }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
+
+                loader.bufferList[index] = buffer;
+
+                if (++loader.loadCount == loader.urlList.length) {
+                    loader.onload(loader.bufferList);
                 }
-            });
-        }, function () { fail && fail(FileError.NOT_FOUND_ERR); });
-    },
-
-    copyTo:function(success,fail,args) { // ["fullPath","parent", "newName"]
-        var srcPath = args[0];
-        var parentFullPath = args[1];
-        var name = args[2];
-
-        //name can't be invalid
-        if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(name)) {
-            fail && fail(FileError.ENCODING_ERR);
-            return;
-        }
-        // copy
-        var copyFiles = "";
-        Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(
-            function (sFile) {
-                copyFiles = function (srcPath, parentPath) {
-                    var storageFileTop = null;
-                    Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(function (storageFile) {
-                        storageFileTop = storageFile;
-                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
-                    }, function () {
-
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }).then(function (storageFolder) {
-                        storageFileTop.copyAsync(storageFolder, name, Windows.Storage.NameCollisionOption.failIfExists).then(function (storageFile) {
-
-                            success(new FileEntry(storageFile.name, storageFile.path));
-                        }, function () {
-
-                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                        });
-                    }, function () {
-
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    });
-                };
-                var copyFinish = function (srcPath, parentPath) {
-                    copyFiles(srcPath, parentPath);
-                };
-                copyFinish(srcPath, parentFullPath);
-            },
-            function () {
-                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(
-                    function (sFolder) {
-                        copyFiles = function (srcPath, parentPath) {
-                            var coreCopy = function (storageFolderTop, complete) {
-                                storageFolderTop.createFolderQuery().getFoldersAsync().then(function (folderList) {
-                                    var folderPromiseArr = [];
-                                    if (folderList.length === 0) { complete(); }
-                                    else {
-                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolderTarget) {
-                                            var tempPromiseArr = [];
-                                            var index = 0;
-                                            for (var j = 0; j < folderList.length; j++) {
-                                                tempPromiseArr[index++] = storageFolderTarget.createFolderAsync(folderList[j].name).then(function (targetFolder) {
-                                                    folderPromiseArr.push(copyFiles(folderList[j].path, targetFolder.path));
-                                                });
-                                            }
-                                            WinJS.Promise.join(tempPromiseArr).then(function () {
-                                                WinJS.Promise.join(folderPromiseArr).then(complete);
-                                            });
-                                        });
-                                    }
-                                });
-                            };
-
-                            return new WinJS.Promise(function (complete) {
-                                var storageFolderTop = null;
-                                var filePromiseArr = [];
-                                var fileListTop = null;
-                                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (storageFolder) {
-                                    storageFolderTop = storageFolder;
-                                    return storageFolder.createFileQuery().getFilesAsync();
-                                }).then(function (fileList) {
-                                    fileListTop = fileList;
-                                    if (fileList) {
-                                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
-                                    }
-                                }).then(function (targetStorageFolder) {
-                                    for (var i = 0; i < fileListTop.length; i++) {
-                                        filePromiseArr.push(fileListTop[i].copyAsync(targetStorageFolder));
-                                    }
-                                    WinJS.Promise.join(filePromiseArr).then(function () {
-                                        coreCopy(storageFolderTop, complete);
-                                    });
-                                });
-                            });
-                        };
-                        var copyFinish = function (srcPath, parentPath) {
-                            Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolder) {
-                                storageFolder.createFolderAsync(name, Windows.Storage.CreationCollisionOption.openIfExists).then(function (newStorageFolder) {
-                                    //can't copy onto itself
-                                    if (srcPath == newStorageFolder.path) {
-                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                        return;
-                                    }
-                                    //can't copy into itself
-                                    if (srcPath == parentPath) {
-                                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                        return;
-                                    }
-                                    copyFiles(srcPath, newStorageFolder.path).then(function () {
-                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(newStorageFolder.path).done(
-                                            function (storageFolder) {
-                                                success(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                                            },
-                                            function () { fail && fail(FileError.NOT_FOUND_ERR); }
-                                        );
-                                    });
-                                }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
-                            }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
-                        };
-                        copyFinish(srcPath, parentFullPath);
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }
-                );
             }
         );
-    },
-
-    moveTo:function(success,fail,args) {
-        var srcPath = args[0];
-        var parentFullPath = args[1];
-        var name = args[2];
-
-
-        //name can't be invalid
-        if (/\?|\\|\*|\||\"|<|>|\:|\//g.test(name)) {
-            fail && fail(FileError.ENCODING_ERR);
-            return;
-        }
-
-        var moveFiles = "";
-        Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(
-            function (sFile) {
-                moveFiles = function (srcPath, parentPath) {
-                    var storageFileTop = null;
-                    Windows.Storage.StorageFile.getFileFromPathAsync(srcPath).then(function (storageFile) {
-                        storageFileTop = storageFile;
-                        return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }).then(function (storageFolder) {
-                        storageFileTop.moveAsync(storageFolder, name, Windows.Storage.NameCollisionOption.replaceExisting).then(function () {
-                            success(new FileEntry(name, storageFileTop.path));
-                        }, function () {
-                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                        });
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    });
-                };
-                var moveFinish = function (srcPath, parentPath) {
-                    //can't copy onto itself
-                    if (srcPath == parentPath + "\\" + name) {
-                        fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                        return;
-                    }
-                    moveFiles(srcPath, parentFullPath);
-                };
-                moveFinish(srcPath, parentFullPath);
-            },
-            function () {
-                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(
-                    function (sFolder) {
-                        moveFiles = function (srcPath, parentPath) {
-                            var coreMove = function (storageFolderTop, complete) {
-                                storageFolderTop.createFolderQuery().getFoldersAsync().then(function (folderList) {
-                                    var folderPromiseArr = [];
-                                    if (folderList.length === 0) {
-                                        // If failed, we must cancel the deletion of folders & files.So here wo can't delete the folder.
-                                        complete();
-                                    }
-                                    else {
-                                        Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (storageFolderTarget) {
-                                            var tempPromiseArr = [];
-                                            var index = 0;
-                                            for (var j = 0; j < folderList.length; j++) {
-                                                tempPromiseArr[index++] = storageFolderTarget.createFolderAsync(folderList[j].name).then(function (targetFolder) {
-                                                    folderPromiseArr.push(moveFiles(folderList[j].path, targetFolder.path));
-                                                });
-                                            }
-                                            WinJS.Promise.join(tempPromiseArr).then(function () {
-                                                WinJS.Promise.join(folderPromiseArr).then(complete);
-                                            });
-                                        });
-                                    }
-                                });
-                            };
-                            return new WinJS.Promise(function (complete) {
-                                var storageFolderTop = null;
-                                Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (storageFolder) {
-                                    storageFolderTop = storageFolder;
-                                    return storageFolder.createFileQuery().getFilesAsync();
-                                }).then(function (fileList) {
-                                    var filePromiseArr = [];
-                                    Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath).then(function (dstStorageFolder) {
-                                        if (fileList) {
-                                            for (var i = 0; i < fileList.length; i++) {
-                                                filePromiseArr.push(fileList[i].moveAsync(dstStorageFolder));
-                                            }
-                                        }
-                                        WinJS.Promise.join(filePromiseArr).then(function () {
-                                            coreMove(storageFolderTop, complete);
-                                        }, function () { });
-                                    });
-                                });
-                            });
-                        };
-                        var moveFinish = function (srcPath, parentPath) {
-                            var originFolderTop = null;
-                            Windows.Storage.StorageFolder.getFolderFromPathAsync(srcPath).then(function (originFolder) {
-                                originFolderTop = originFolder;
-                                return Windows.Storage.StorageFolder.getFolderFromPathAsync(parentPath);
-                            }, function () {
-                                fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                            }).then(function (storageFolder) {
-                                return storageFolder.createFolderAsync(name, Windows.Storage.CreationCollisionOption.openIfExists);
-                            }, function () {
-                                fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                            }).then(function (newStorageFolder) {
-                                //can't move onto directory that is not empty
-                                newStorageFolder.createFileQuery().getFilesAsync().then(function (fileList) {
-                                    newStorageFolder.createFolderQuery().getFoldersAsync().then(function (folderList) {
-                                        if (fileList.length !== 0 || folderList.length !== 0) {
-                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                            return;
-                                        }
-                                        //can't copy onto itself
-                                        if (srcPath == newStorageFolder.path) {
-                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                            return;
-                                        }
-                                        //can't copy into itself
-                                        if (srcPath == parentPath) {
-                                            fail && fail(FileError.INVALID_MODIFICATION_ERR);
-                                            return;
-                                        }
-                                        moveFiles(srcPath, newStorageFolder.path).then(function () {
-                                            var successCallback = function () {
-                                                success(new DirectoryEntry(name, newStorageFolder.path));
-                                            };
-                                            var temp = new DirectoryEntry(originFolderTop.name, originFolderTop.path).removeRecursively(successCallback, fail);
-
-                                        }, function () { console.log("error!"); });
-                                    });
-                                });
-                            }, function () { fail && fail(FileError.INVALID_MODIFICATION_ERR); });
-
-                        };
-                        moveFinish(srcPath, parentFullPath);
-                    }, function () {
-                        fail && fail(FileError.NOT_FOUND_ERR);
-                    }
-                );
-            }
-        );
-    },
-    tempFileSystem:null,
-
-    persistentFileSystem:null,
-
-    requestFileSystem:function(win,fail,args) {
-        var type = args[0];
-        var size = args[1];
-
-        var filePath = "";
-        var result = null;
-        var fsTypeName = "";
-
-        switch (type) {
-            case LocalFileSystem.TEMPORARY:
-                filePath = Windows.Storage.ApplicationData.current.temporaryFolder.path;
-                fsTypeName = "temporary";
-                break;
-            case LocalFileSystem.PERSISTENT:
-                filePath = Windows.Storage.ApplicationData.current.localFolder.path;
-                fsTypeName = "persistent";
-                break;
-        }
-
-        var MAX_SIZE = 10000000000;
-        if (size > MAX_SIZE) {
-            fail && fail(FileError.QUOTA_EXCEEDED_ERR);
-            return;
-        }
-
-        var fileSystem = new FileSystem(fsTypeName, new DirectoryEntry(fsTypeName, filePath));
-        result = fileSystem;
-        win(result);
-    },
-
-    resolveLocalFileSystemURI:function(success,fail,args) {
-        var uri = args[0];
-
-        var path = uri;
-
-        // support for file name with parameters
-        if (/\?/g.test(path)) {
-            path = String(path).split("?")[0];
-        }
-
-        // support for encodeURI
-        if (/\%5/g.test(path)) {
-            path = decodeURI(path);
-        }
-
-        // support for special path start with file:///
-        if (path.substr(0, 8) == "file:///") {
-            path = Windows.Storage.ApplicationData.current.localFolder.path + "\\" + String(path).substr(8).split("/").join("\\");
-            Windows.Storage.StorageFile.getFileFromPathAsync(path).then(
-                function (storageFile) {
-                    success(new FileEntry(storageFile.name, storageFile.path));
-                }, function () {
-                    Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
-                        function (storageFolder) {
-                            success(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                        }, function () {
-                            fail && fail(FileError.NOT_FOUND_ERR);
-                        }
-                    );
-                }
-            );
-        } else {
-            Windows.Storage.StorageFile.getFileFromPathAsync(path).then(
-                function (storageFile) {
-                    success(new FileEntry(storageFile.name, storageFile.path));
-                }, function () {
-                    Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(
-                        function (storageFolder) {
-                            success(new DirectoryEntry(storageFolder.name, storageFolder.path));
-                        }, function () {
-                            fail && fail(FileError.ENCODING_ERR);
-                        }
-                    );
-                }
-            );
-        }
-    }
-
-};
-
-require("cordova/commandProxy").add("File",module.exports);
-
-});
-
-// file: lib\windows8\plugin\windows8\FileTransferProxy.js
-define("cordova/plugin/windows8/FileTransferProxy", function(require, exports, module) {
-
-
-var FileTransferError = require('cordova/plugin/FileTransferError'),
-    FileUploadResult = require('cordova/plugin/FileUploadResult'),
-    FileEntry = require('cordova/plugin/FileEntry');
-
-module.exports = {
-
-    upload:function(successCallback, error, options) {
-        var filePath = options[0];
-        var server = options[1];
-
-
-        var win = function (fileUploadResult) {
-            successCallback(fileUploadResult);
-        };
-
-        if (filePath === null || typeof filePath === 'undefined') {
-            error(FileTransferError.FILE_NOT_FOUND_ERR);
-            return;
-        }
-
-        if (String(filePath).substr(0, 8) == "file:///") {
-            filePath = Windows.Storage.ApplicationData.current.localFolder.path + String(filePath).substr(8).split("/").join("\\");
-        }
-
-        Windows.Storage.StorageFile.getFileFromPathAsync(filePath).then(function (storageFile) {
-            storageFile.openAsync(Windows.Storage.FileAccessMode.read).then(function (stream) {
-                var blob = MSApp.createBlobFromRandomAccessStream(storageFile.contentType, stream);
-                var formData = new FormData();
-                formData.append("source\";filename=\"" + storageFile.name + "\"", blob);
-                WinJS.xhr({ type: "POST", url: server, data: formData }).then(function (response) {
-                    var code = response.status;
-                    storageFile.getBasicPropertiesAsync().done(function (basicProperties) {
-
-                        Windows.Storage.FileIO.readBufferAsync(storageFile).done(function (buffer) {
-                            var dataReader = Windows.Storage.Streams.DataReader.fromBuffer(buffer);
-                            var fileContent = dataReader.readString(buffer.length);
-                            dataReader.close();
-                            win(new FileUploadResult(basicProperties.size, code, fileContent));
-
-                        });
-
-                    });
-                }, function () {
-                    error(FileTransferError.INVALID_URL_ERR);
-                });
-            });
-
-        },function(){error(FileTransferError.FILE_NOT_FOUND_ERR);});
-    },
-
-    download:function(win, error, options) {
-        var source = options[0];
-        var target = options[1];
-
-
-        if (target === null || typeof target === undefined) {
-            error(FileTransferError.FILE_NOT_FOUND_ERR);
-            return;
-        }
-        if (String(target).substr(0, 8) == "file:///") {
-            target = Windows.Storage.ApplicationData.current.localFolder.path + String(target).substr(8).split("/").join("\\");
-        }
-        var path = target.substr(0, String(target).lastIndexOf("\\"));
-        var fileName = target.substr(String(target).lastIndexOf("\\") + 1);
-        if (path === null || fileName === null) {
-            error(FileTransferError.FILE_NOT_FOUND_ERR);
-            return;
-        }
-
-        var download = null;
-
-
-        Windows.Storage.StorageFolder.getFolderFromPathAsync(path).then(function (storageFolder) {
-            storageFolder.createFileAsync(fileName, Windows.Storage.CreationCollisionOption.generateUniqueName).then(function (storageFile) {
-                var uri = Windows.Foundation.Uri(source);
-                var downloader = new Windows.Networking.BackgroundTransfer.BackgroundDownloader();
-                download = downloader.createDownload(uri, storageFile);
-                download.startAsync().then(function () {
-                    win(new FileEntry(storageFile.name, storageFile.path));
-                }, function () {
-                    error(FileTransferError.INVALID_URL_ERR);
-                });
-            });
-        });
-    }
-};
-
-require("cordova/commandProxy").add("FileTransfer",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\MediaFile.js
-define("cordova/plugin/windows8/MediaFile", function(require, exports, module) {
-
-/*global Windows:true */
-
-var MediaFileData = require('cordova/plugin/MediaFileData');
-var CaptureError = require('cordova/plugin/CaptureError');
-
-module.exports = {
-
-    getFormatData: function (successCallback, errorCallback, args) {
-        Windows.Storage.StorageFile.getFileFromPathAsync(this.fullPath).then(
-            function (storageFile) {
-                var mediaTypeFlag = String(storageFile.contentType).split("/")[0].toLowerCase();
-                if (mediaTypeFlag === "audio") {
-                    storageFile.properties.getMusicPropertiesAsync().then(
-                        function (audioProperties) {
-                            successCallback(new MediaFileData(null, audioProperties.bitrate, 0, 0, audioProperties.duration / 1000));
-                        }, function () {
-                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                        }
-                    );
-                } else if (mediaTypeFlag === "video") {
-                    storageFile.properties.getVideoPropertiesAsync().then(
-                        function (videoProperties) {
-                            successCallback(new MediaFileData(null, videoProperties.bitrate, videoProperties.height, videoProperties.width, videoProperties.duration / 1000));
-                        }, function () {
-                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                        }
-                    );
-                } else if (mediaTypeFlag === "image") {
-                    storageFile.properties.getImagePropertiesAsync().then(
-                        function (imageProperties) {
-                            successCallback(new MediaFileData(null, 0, imageProperties.height, imageProperties.width, 0));
-                        }, function () {
-                            errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                        }
-                    );
-                } else {
-                    errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-                }
-            }, function () {
-                errorCallback(new CaptureError(CaptureError.CAPTURE_INVALID_ARGUMENT));
-            }
-        );
-    }
-};
-
-});
-
-// file: lib\windows8\plugin\windows8\MediaProxy.js
-define("cordova/plugin/windows8/MediaProxy", function(require, exports, module) {
-
-/*global Windows:true */
-
-var cordova = require('cordova'),
-    Media = require('cordova/plugin/Media');
-
-var MediaError = require('cordova/plugin/MediaError');
-
-module.exports = {
-    mediaCaptureMrg:null,
-
-    // Initiates the audio file
-    create:function(win, lose, args) {
-        var id = args[0];
-        var src = args[1];
-        var thisM = Media.get(id);
-        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STARTING);
-
-        Media.prototype.node = null;
-
-        var fn = src.split('.').pop(); // gets the file extension
-        if (thisM.node === null) {
-            if (fn === 'mp3' || fn === 'wma' || fn === 'wma' ||
-                fn === 'cda' || fn === 'adx' || fn === 'wm' ||
-                fn === 'm3u' || fn === 'wmx') {
-                thisM.node = new Audio(src);
-                thisM.node.load();
-                var dur = thisM.node.duration;
-                if (isNaN(dur)) {
-                    dur = -1;
-                }
-                Media.onStatus(id, Media.MEDIA_DURATION, dur);
-            }
-            else {
-                lose && lose({code:MediaError.MEDIA_ERR_ABORTED});
-            }
-        }
-    },
-
-    // Start playing the audio
-    startPlayingAudio:function(win, lose, args) {
-        var id = args[0];
-        //var src = args[1];
-        //var options = args[2];
-        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_RUNNING);
-
-        (Media.get(id)).node.play();
-    },
-
-    // Stops the playing audio
-    stopPlayingAudio:function(win, lose, args) {
-        var id = args[0];
-        try {
-            (Media.get(id)).node.pause();
-            (Media.get(id)).node.currentTime = 0;
-            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
-            win();
-        } catch (err) {
-            lose("Failed to stop: "+err);
-        }
-    },
-
-    // Seeks to the position in the audio
-    seekToAudio:function(win, lose, args) {
-        var id = args[0];
-        var milliseconds = args[1];
-        try {
-            (Media.get(id)).node.currentTime = milliseconds / 1000;
-            win();
-        } catch (err) {
-            lose("Failed to seek: "+err);
-        }
-    },
-
-    // Pauses the playing audio
-    pausePlayingAudio:function(win, lose, args) {
-        var id = args[0];
-        var thisM = Media.get(id);
-        try {
-            thisM.node.pause();
-            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_PAUSED);
-        } catch (err) {
-            lose("Failed to pause: "+err);
-        }
-    },
-
-    // Gets current position in the audio
-    getCurrentPositionAudio:function(win, lose, args) {
-        var id = args[0];
-        try {
-            var p = (Media.get(id)).node.currentTime;
-            Media.onStatus(id, Media.MEDIA_POSITION, p);
-            win(p);
-        } catch (err) {
-            lose(err);
-        }
-    },
-
-    // Start recording audio
-    startRecordingAudio:function(win, lose, args) {
-        var id = args[0];
-        var src = args[1];
-        // Initialize device
-        Media.prototype.mediaCaptureMgr = null;
-        var thisM = (Media.get(id));
-        var captureInitSettings = new Windows.Media.Capture.MediaCaptureInitializationSettings();
-        captureInitSettings.streamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.audio;
-        thisM.mediaCaptureMgr = new Windows.Media.Capture.MediaCapture();
-        thisM.mediaCaptureMgr.addEventListener("failed", lose);
-
-        thisM.mediaCaptureMgr.initializeAsync(captureInitSettings).done(function (result) {
-            thisM.mediaCaptureMgr.addEventListener("recordlimitationexceeded", lose);
-            thisM.mediaCaptureMgr.addEventListener("failed", lose);
-        }, lose);
-        // Start recording
-        Windows.Storage.KnownFolders.musicLibrary.createFileAsync(src, Windows.Storage.CreationCollisionOption.replaceExisting).done(function (newFile) {
-            var storageFile = newFile;
-            var fileType = this.src.split('.').pop();
-            var encodingProfile = null;
-            switch (fileType) {
-                case 'm4a':
-                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createM4a(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
-                    break;
-                case 'mp3':
-                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createMp3(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
-                    break;
-                case 'wma':
-                    encodingProfile = Windows.Media.MediaProperties.MediaEncodingProfile.createWma(Windows.Media.MediaProperties.AudioEncodingQuality.auto);
-                    break;
-                default:
-                    lose("Invalid file type for record");
-                    break;
-            }
-            thisM.mediaCaptureMgr.startRecordToStorageFileAsync(encodingProfile, storageFile).done(win, lose);
-        }, lose);
-    },
-
-    // Stop recording audio
-    stopRecordingAudio:function(win, lose, args) {
-        var id = args[0];
-        var thisM = Media.get(id);
-        thisM.mediaCaptureMgr.stopRecordAsync().done(win, lose);
-    },
-
-    // Release the media object
-    release:function(win, lose, args) {
-        var id = args[0];
-        var thisM = Media.get(id);
-        try {
-            delete thisM.node;
-        } catch (err) {
-            lose("Failed to release: "+err);
-        }
-    },
-    setVolume:function(win, lose, args) {
-        var id = args[0];
-        var volume = args[1];
-        var thisM = Media.get(id);
-        thisM.volume = volume;
-    }
-};
-
-require("cordova/commandProxy").add("Media",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\NetworkStatusProxy.js
-define("cordova/plugin/windows8/NetworkStatusProxy", function(require, exports, module) {
-
-/*global Windows:true */
-
-var cordova = require('cordova');
-var Connection = require('cordova/plugin/Connection');
-
-module.exports = {
-
-    getConnectionInfo:function(win,fail,args)
-    {
-        console.log("NetworkStatusProxy::getConnectionInfo");
-        var winNetConn = Windows.Networking.Connectivity;
-        var networkInfo = winNetConn.NetworkInformation;
-        var networkCostInfo = winNetConn.NetworkCostType;
-        var networkConnectivityInfo = winNetConn.NetworkConnectivityLevel;
-        var networkAuthenticationInfo = winNetConn.NetworkAuthenticationType;
-        var networkEncryptionInfo = winNetConn.NetworkEncryptionType;
-
-        var connectionType;
-
-        var profile = Windows.Networking.Connectivity.NetworkInformation.getInternetConnectionProfile();
-        if(profile) {
-            var conLevel = profile.getNetworkConnectivityLevel();
-            var interfaceType = profile.networkAdapter.ianaInterfaceType;
-
-            if (conLevel == Windows.Networking.Connectivity.NetworkConnectivityLevel.none) {
-                connectionType = Connection.NONE;
-            }
-            else {
-                switch (interfaceType) {
-                    case 71:
-                        connectionType = Connection.WIFI;
-                        break;
-                    case 6:
-                        connectionType = Connection.ETHERNET;
-                        break;
-                    case 243: // (3GPP WWAN) // Fallthrough is intentional
-                    case 244: // (3GPP2 WWAN)
-                         connectionType = Connection.CELL_3G;
-                         break;
-                    default:
-                        connectionType = Connection.UNKNOWN;
-                        break;
-                }
-            }
-        }
-        // FYI
-        //Connection.UNKNOWN  'Unknown connection';
-        //Connection.ETHERNET 'Ethernet connection';
-        //Connection.WIFI     'WiFi connection';
-        //Connection.CELL_2G  'Cell 2G connection';
-        //Connection.CELL_3G  'Cell 3G connection';
-        //Connection.CELL_4G  'Cell 4G connection';
-        //Connection.NONE     'No network connection';
-
-        setTimeout(function () {
-            if (connectionType) {
-                win(connectionType);
-            } else {
-                win(Connection.NONE);
-            }
-        },0);
-    }
-
-};
-
-require("cordova/commandProxy").add("NetworkStatus",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\NotificationProxy.js
-define("cordova/plugin/windows8/NotificationProxy", function(require, exports, module) {
-
-/*global Windows:true */
-
-var cordova = require('cordova');
-
-var isAlertShowing = false;
-var alertStack = [];
-
-module.exports = {
-    alert:function(win, loseX, args) {
-
-        if (isAlertShowing) {
-            var later = function () {
-                module.exports.alert(win, loseX, args);
-            };
-            alertStack.push(later);
-            return;
-        }
-        isAlertShowing = true;
-
-        var message = args[0];
-        var _title = args[1];
-        var _buttonLabel = args[2];
-
-        var md = new Windows.UI.Popups.MessageDialog(message, _title);
-        md.commands.append(new Windows.UI.Popups.UICommand(_buttonLabel));
-        md.showAsync().then(function() {
-            isAlertShowing = false;
-            win && win();
-
-            if (alertStack.length) {
-                setTimeout(alertStack.shift(), 0);
-            }
-
-        });
-    },
-
-    confirm:function(win, loseX, args) {
-
-        if (isAlertShowing) {
-            var later = function () {
-                module.exports.confirm(win, loseX, args);
-            };
-            alertStack.push(later);
-            return;
-        }
-
-        isAlertShowing = true;
-
-        var message = args[0];
-        var _title = args[1];
-        var _buttonLabels = args[2];
-
-        var btnList = [];
-        function commandHandler (command) {
-            win && win(btnList[command.label]);
-        }
-
-        var md = new Windows.UI.Popups.MessageDialog(message, _title);
-        var button = _buttonLabels.split(',');
-
-        for (var i = 0; i<button.length; i++) {
-            btnList[button[i]] = i+1;
-            md.commands.append(new Windows.UI.Popups.UICommand(button[i],commandHandler));
-        }
-        md.showAsync().then(function() {
-            isAlertShowing = false;
-            if (alertStack.length) {
-                setTimeout(alertStack.shift(), 0);
-            }
-
-        });
-    },
-
-    vibrate:function(winX, loseX, args) {
-        var mills = args[0];
-
-        //...
-    },
-
-    beep:function(winX, loseX, args) {
-        var count = args[0];
-        /*
-        var src = //filepath//
-        var playTime = 500; // ms
-        var quietTime = 1000; // ms
-        var media = new Media(src, function(){});
-        var hit = 1;
-        var intervalId = window.setInterval( function () {
-            media.play();
-            sleep(playTime);
-            media.stop();
-            media.seekTo(0);
-            if (hit < count) {
-                hit++;
-            } else {
-                window.clearInterval(intervalId);
-            }
-        }, playTime + quietTime); */
-    }
-};
-
-require("cordova/commandProxy").add("Notification",module.exports);
-});
-
-// file: lib\windows8\plugin\windows8\console.js
-define("cordova/plugin/windows8/console", function(require, exports, module) {
-
-
-if(!console || !console.log)
-{
-    var exec = require('cordova/exec');
-
-    var debugConsole = {
-        log:function(msg){
-            exec(null,null,"DebugConsole","log",msg);
-        },
-        warn:function(msg){
-            exec(null,null,"DebugConsole","warn",msg);
-        },
-        error:function(msg){
-            exec(null,null,"DebugConsole","error",msg);
-        }
     };
 
-    module.exports = debugConsole;
-}
-else if(console && console.log) {
+    request.onerror = function() {
+        console.log ("BufferLoader.prototype.loadBuffer, XHR error");
+    };
 
-  console.log("console.log exists already!");
-  console.warn = console.warn || function(msg){console.log("warn:"+msg);};
-  console.error = console.error || function(msg){console.log("error:"+msg);};
-}
+    request.send();
+};
+
+/*
+ * This method loads all sounds identified by their url
+ * and that where given to the object constructor
+ *
+ */
+
+BufferLoader.prototype.load = function() {
+    for (var i = 0; i < this.urlList.length; ++i) {
+        this.loadBuffer(this.urlList[i], i);
+    }
+};
+
+module.exports = BufferLoader;
 
 });
 
-// file: lib\windows8\plugin\windows8\console\symbols.js
-define("cordova/plugin/windows8/console/symbols", function(require, exports, module) {
+// file: lib\tizen\plugin\tizen\Camera.js
+define("cordova/plugin/tizen/Camera", function(require, exports, module) {
 
+/*global tizen:false */
+var Camera = require('cordova/plugin/CameraConstants');
+
+
+//console.log("TIZEN CAMERA START");
+
+function cameraMakeReplyCallback(successCallback, errorCallback) {
+    return {
+        onsuccess: function(reply) {
+            if (reply.length > 0) {
+                successCallback(reply[0].value);
+            }
+            else {
+                errorCallback('Picture selection aborted');
+            }
+        },
+        onfail: function() {
+           console.log('The service launch failed');
+        }
+    };
+}
+
+module.exports = {
+    takePicture: function(successCallback, errorCallback, args) {
+        var destinationType = args[1],
+            sourceType = args[2],
+            encodingType = args[5],
+            mediaType = args[6];
+
+            // Not supported
+            /*
+            quality = args[0]
+            targetWidth = args[3]
+            targetHeight = args[4]
+            allowEdit = args[7]
+            correctOrientation = args[8]
+            saveToPhotoAlbum = args[9]
+            */
+
+            if (destinationType !== Camera.DestinationType.FILE_URI) {
+                errorCallback('DestinationType not supported');
+                return;
+            }
+
+            if (mediaType !== Camera.MediaType.PICTURE) {
+                errorCallback('MediaType not supported');
+                return;
+            }
+
+            var mimeType;
+            if (encodingType === Camera.EncodingType.JPEG) {
+                mimeType = 'image/jpeg';
+            }
+            else if (encodingType === Camera.EncodingType.PNG) {
+                mimeType = 'image/png';
+            }
+            else {
+                mimeType = 'image/*';
+            }
+
+            var serviceId;
+            if (sourceType === Camera.PictureSourceType.CAMERA) {
+                serviceId = 'http://tizen.org/appcontrol/operation/create_content';
+            }
+            else {
+                serviceId = 'http://tizen.org/appcontrol/operation/pick';
+            }
+
+            var serviceControl = new tizen.ApplicationControl(
+                                serviceId,
+                                null,
+                                mimeType,
+                                null);
+
+            tizen.application.launchAppControl(
+                    serviceControl,
+                    null,
+                    null,
+                    function(error) {
+                        errorCallback(error.message);
+                    },
+                    cameraMakeReplyCallback(successCallback, errorCallback)
+            );
+        }
+};
+
+//console.log("TIZEN CAMERA END");
+
+});
+
+// file: lib\tizen\plugin\tizen\Compass.js
+define("cordova/plugin/tizen/Compass", function(require, exports, module) {
+
+var CompassError = require('cordova/plugin/CompassError'),
+    CompassHeading = require('cordova/plugin/CompassHeading');
+
+var compassCallback = null,
+    compassReady = false;
+
+//console.log("TIZEN COMPASS START");
+
+module.exports = {
+    getHeading: function(successCallback, errorCallback) {
+
+        if (window.DeviceOrientationEvent !== undefined) {
+
+            compassCallback = function (orientation) {
+                var heading = 360 - orientation.alpha;
+
+                if (compassReady) {
+                    successCallback( new CompassHeading (heading, heading, 0, 0));
+                    window.removeEventListener("deviceorientation", compassCallback, true);
+                }
+                compassReady = true;
+            };
+            compassReady = false; // workaround invalid first event value returned by WRT
+            window.addEventListener("deviceorientation", compassCallback, true);
+        }
+        else {
+            errorCallback(CompassError.COMPASS_NOT_SUPPORTED);
+        }
+    }
+};
+
+//console.log("TIZEN COMPASS END");
+
+
+});
+
+// file: lib\tizen\plugin\tizen\Contact.js
+define("cordova/plugin/tizen/Contact", function(require, exports, module) {
+
+/*global tizen:false */
+//var ContactError = require('cordova/plugin/ContactError'),
+//    ContactUtils = require('cordova/plugin/tizen/ContactUtils');
+
+// ------------------
+// Utility functions
+// ------------------
+
+
+//console.log("TIZEN CONTACT START");
+
+
+var ContactError = require('cordova/plugin/ContactError'),
+    ContactUtils = require('cordova/plugin/tizen/ContactUtils'),
+    utils = require('cordova/utils'),
+    exec = require('cordova/exec');
+
+
+
+/**
+ * Retrieves a Tizen Contact object from the device by its unique id.
+ *
+ * @param uid
+ *            Unique id of the contact on the device
+ * @return {tizen.Contact} Tizen Contact object or null if contact with
+ *         specified id is not found
+ */
+var findByUniqueId = function(id) {
+
+    if (!id) {
+        return null;
+    }
+
+    var tizenContact = null;
+
+    tizen.contact.getDefaultAddressBook().find(
+        function _successCallback(contacts){
+            tizenContact = contacts[0];
+        },
+        function _errorCallback(error){
+            console.log("tizen find error " + error);
+        },
+        new tizen.AttributeFilter('id', 'CONTAINS', id),
+        new tizen.SortMode('id', 'ASC'));
+
+    return tizenContact || null;
+};
+
+
+var traceTizenContact = function (tizenContact) {
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.id " + tizenContact.id);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.personId " + tizenContact.personId);     //Tizen 2.0
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.addressBookId " + tizenContact.addressBookId);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.lastUpdated " + tizenContact.lastUpdated);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.isFavorite " + tizenContact.isFavorite);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.name " + tizenContact.name);
+
+    //console.log("cordova/plugin/tizen/Contact/  tizenContact.account " + tizenContact.account);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.addresses " + tizenContact.addresses);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.photoURI " + tizenContact.photoURI);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.phoneNumbers " + tizenContact.phoneNumbers);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.emails " + tizenContact.emails);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.birthday " + tizenContact.birthday);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.anniversaries " + tizenContact.anniversaries);
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.organizations " + tizenContact.organizations);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.notes " + tizenContact.notes);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.urls " + tizenContact.urls);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.ringtonesURI " + tizenContact.ringtonesURI);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.groupIds " + tizenContact.groupIds);    //Tizen 2.0
+
+    //console.log("cordova/plugin/tizen/Contact/  tizenContact.categories " + tizenContact.categories);  //Tizen 2.0
+};
+
+
+/**
+ * Creates a Tizen contact object from the W3C Contact object and persists
+ * it to device storage.
+ *
+ * @param {Contact}
+ *            contact The contact to save
+ * @return a new contact object with all properties set
+ */
+var saveToDevice = function(contact) {
+
+    if (!contact) {
+        return;
+    }
+
+    var tizenContact = null;
+    var update = false;
+    var i = 0;
+
+    // if the underlying Tizen Contact object already exists, retrieve it for
+    // update
+    if (contact.id) {
+        // we must attempt to retrieve the BlackBerry contact from the device
+        // because this may be an update operation
+        tizenContact = findByUniqueId(contact.id);
+    }
+
+    // contact not found on device, create a new one
+    if (!tizenContact) {
+        tizenContact = new tizen.Contact();
+    }
+    // update the existing contact
+    else {
+        update = true;
+    }
+
+    // NOTE: The user may be working with a partial Contact object, because only
+    // user-specified Contact fields are returned from a find operation (blame
+    // the W3C spec). If this is an update to an existing Contact, we don't
+    // want to clear an attribute from the contact database simply because the
+    // Contact object that the user passed in contains a null value for that
+    // attribute. So we only copy the non-null Contact attributes to the
+    // Tizen Contact object before saving.
+    //
+    // This means that a user must explicitly set a Contact attribute to a
+    // non-null value in order to update it in the contact database.
+    //
+    traceTizenContact (tizenContact);
+
+    // display name
+    if (contact.displayName !== null) {
+        if (tizenContact.name === null) {
+            tizenContact.name = new tizen.ContactName();
+        }
+        if (tizenContact.name !== null) {
+            tizenContact.name.displayName = contact.displayName;
+        }
+    }
+
+    // name
+    if (contact.name !== null) {
+        if (contact.name.givenName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.firstName = contact.name.givenName;
+            }
+        }
+
+        if  (contact.name.middleName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.middleName = contact.name.middleName;
+            }
+        }
+
+        if (contact.name.familyName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.lastName = contact.name.familyName;
+            }
+        }
+
+        if (contact.name.honorificPrefix) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.prefix = contact.name.honorificPrefix;
+            }
+        }
+
+        //Tizen 2.0
+        if (contact.name.honorificSuffix) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.suffix = contact.name.honorificSuffix;
+            }
+        }
+    }
+
+    // nickname
+    if (contact.nickname !== null) {
+        if (tizenContact.name === null) {
+            tizenContact.name = new tizen.ContactName();
+        }
+        if (tizenContact.name !== null) {
+            if (!utils.isArray(tizenContact.name.nicknames))
+            {
+                tizenContact.name.nicknames = [];
+            }
+            tizenContact.name.nicknames[0] = contact.nickname;
+        }
+    }
+    else {
+        tizenContact.name.nicknames = [];
+    }
+
+    // notes - Tizen 2.0 (was note)
+    if (contact.note !== null) {
+        if (tizenContact.notes === null) {
+            tizenContact.notes = [];
+        }
+        if (tizenContact.notes !== null) {
+            tizenContact.notes[0] = contact.note;
+        }
+    }
+
+    // photos
+    if (contact.photos && utils.isArray(contact.photos) && contact.photos.length > 0) {
+        tizenContact.photoURI = contact.photos[0];
+    }
+
+    if (utils.isDate(contact.birthday)) {
+        if (!utils.isDate(tizenContact.birthday)) {
+            tizenContact.birthday = new Date();
+        }
+        if (utils.isDate(tizenContact.birthday)) {
+            tizenContact.birthday.setDate(contact.birthday.getDate());
+        }
+    }
+
+    // Tizen supports many email addresses
+    if (utils.isArray(contact.emails)) {
+
+        // if this is an update, re initialize email addresses
+        if (update) {
+            // doit on effacer sur un update??????
+        }
+
+        // copy the first three email addresses found
+        var emails = [];
+        for (i = 0; i < contact.emails.length; i += 1) {
+            var emailTypes = [];
+
+            emailTypes.push (contact.emails[i].type);
+
+            emails.push(
+                new tizen.ContactEmailAddress(
+                    contact.emails[i].value,
+                    emailTypes,
+                    contact.emails[i].pref));    //Tizen 2.0
+
+        }
+        tizenContact.emails = emails.length > 0 ? emails : [];
+    }
+    else {
+        tizenContact.emails = [];
+    }
+
+    // Tizen supports many phone numbers
+    // copy into appropriate fields based on type
+    if (utils.isArray(contact.phoneNumbers)) {
+        // if this is an update, re-initialize phone numbers
+        if (update) {
+        }
+
+        var phoneNumbers = [];
+
+        for (i = 0; i < contact.phoneNumbers.length; i += 1) {
+
+            if (!contact.phoneNumbers[i]) {
+                continue;
+            }
+
+            var phoneTypes = [];
+            phoneTypes.push (contact.phoneNumbers[i].type);
+
+
+            phoneNumbers.push(
+                new tizen.ContactPhoneNumber(
+                    contact.phoneNumbers[i].value,
+                    phoneTypes,
+                    contact.phoneNumbers[i].pref)    //Tizen 2.0
+            );
+        }
+
+        tizenContact.phoneNumbers = phoneNumbers.length > 0 ? phoneNumbers : [];
+    }
+    else {
+        tizenContact.phoneNumbers = [];
+    }
+
+    if (utils.isArray(contact.addresses)) {
+        // if this is an update, re-initialize addresses
+        if (update) {
+        }
+
+        var addresses = [],
+            address = null;
+
+        for ( i = 0; i < contact.addresses.length; i += 1) {
+            address = contact.addresses[i];
+
+            if (!address) {
+                continue;
+            }
+
+            var addressTypes = [];
+            addressTypes.push (address.type);
+
+            addresses.push(
+                new tizen.ContactAddress({
+                         country:                   address.country,
+                         region :                   address.region,
+                         city:                      address.locality,
+                         streetAddress:             address.streetAddress,
+                         additionalInformation:     "",
+                         postalCode:                address.postalCode,
+                         isDefault:                    address.pref, //Tizen 2.0
+                         types :                    addressTypes
+                }));
+
+        }
+        tizenContact.addresses = addresses.length > 0 ? addresses : [];
+
+    }
+    else{
+        tizenContact.addresses = [];
+    }
+
+    // copy first url found to cordova 'urls' field
+    if (utils.isArray(contact.urls)) {
+        // if this is an update, re-initialize web page
+        if (update) {
+        }
+
+        var url = null,
+            urls = [];
+
+        for ( i = 0; i< contact.urls.length; i+= 1) {
+            url = contact.urls[i];
+
+            if (!url || !url.value) {
+                continue;
+            }
+
+            urls.push( new tizen.ContactWebSite(url.value, url.type));
+        }
+        tizenContact.urls = urls.length > 0 ? urls : [];
+    }
+    else{
+        tizenContact.urls = [];
+    }
+
+    if (utils.isArray(contact.organizations) && contact.organizations.length > 0 ) {
+         // if this is an update, re-initialize addresses
+        if (update) {
+        }
+
+        var organizations = [],
+            organization = null;
+
+        for ( i = 0; i < contact.organizations.length; i += 1) {
+            organization = contact.organizations[i];
+
+            if (!organization) {
+                continue;
+            }
+
+            organizations.push(
+                new tizen.ContactOrganization({
+                    name:          organization.name,
+                    department:    organization.department,
+                    title:         organization.title,
+                    role:          "",
+                    logoURI:       ""
+                }));
+
+        }
+        tizenContact.organizations = organizations.length > 0 ? organizations : [];
+
+    }
+    else{
+        tizenContact.organizations = [];
+    }
+
+    // categories
+    if (utils.isArray(contact.categories)) {
+        tizenContact.categories = [];
+
+        var category = null;
+
+        for (i = 0; i < contact.categories.length; i += 1) {
+            category = contact.categories[i];
+
+            if (typeof category === "string") {
+                tizenContact.categories.push(category);
+            }
+        }
+    }
+    else {
+        tizenContact.categories = [];
+    }
+
+    // save to device
+    // in tizen contact mean update or add
+    // later we might use addBatch and updateBatch
+    if (update){
+        tizen.contact.getDefaultAddressBook().update(tizenContact);
+    }
+    else {
+        tizen.contact.getDefaultAddressBook().add(tizenContact);
+    }
+
+    // Use the fully populated Tizen contact object to create a
+    // corresponding W3C contact object.
+    return ContactUtils.createContact(tizenContact, [ "*" ]);
+};
+
+
+/**
+ * Creates a Tizen ContactAddress object from a W3C ContactAddress.
+ *
+ * @return {tizen.ContactAddress} a Tizen ContactAddress object
+ */
+var createTizenAddress = function(address) {
+
+    var type = null,
+        pref = null,
+        typesAr = [];
+
+    if (address === null) {
+        return null;
+    }
+
+    var tizenAddress = new tizen.ContactAddress();
+
+    if (tizenAddress === null) {
+        return null;
+    }
+
+    typesAr.push(address.type);
+
+    tizenAddress.country = address.country || "";
+    tizenAddress.region = address.region || "";
+    tizenAddress.city = address.locality || "";
+    tizenAddress.streetAddress = address.streetAddress || "";
+    tizenAddress.postalCode = address.postalCode || "";
+    tizenAddress.isDefault = address.pref || false;   //Tizen SDK 2.0
+    tizenAddress.types = typesAr || "";
+
+    return tizenAddress;
+};
+
+module.exports = {
+    /**
+     * Persists contact to device storage.
+     */
+
+    save : function(successCB, failCB) {
+
+        try {
+            // save the contact and store it's unique id
+            var fullContact = saveToDevice(this);
+
+            this.id = fullContact.id;
+
+            // This contact object may only have a subset of properties
+            // if the save was an update of an existing contact. This is
+            // because the existing contact was likely retrieved using a
+            // subset of properties, so only those properties were set in the
+            // object. For this reason, invoke success with the contact object
+            // returned by saveToDevice since it is fully populated.
+
+            if (typeof successCB === 'function') {
+                successCB(fullContact);
+            }
+        }
+        catch (error) {
+            console.log('Error saving contact: ' +  error);
+
+            if (typeof failCB === 'function') {
+                failCB (new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
+    },
+
+    /**
+     * Removes contact from device storage.
+     *
+     * @param successCB
+     *            successCB callback
+     * @param failCB
+     *            error callback
+     */
+    remove : function (successCB, failCB) {
+
+        try {
+            // retrieve contact from device by id
+            var tizenContact = null;
+
+            if (this.id) {
+                tizenContact = findByUniqueId(this.id);
+            }
+
+            // if contact was found, remove it
+            if (tizenContact) {
+                //var addressBook =  tizen.contact.getDefaultAddressBook();
+                var addressBook =  tizen.contact.getAddressBook(tizenContact.addressBookId);   //Tizen SDk 2.0
+
+                addressBook.remove(tizenContact.id);
+
+                if (typeof success === 'function') {
+                    successCB(this);
+                }
+            }
+            // attempting to remove a contact that hasn't been saved
+            else if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
+        catch (error) {
+            console.log('Error removing contact ' + this.id + ": " + error);
+            if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
+    }
+};
+
+//console.log("TIZEN CONTACT END");
+
+});
+
+// file: lib\tizen\plugin\tizen\ContactUtils.js
+define("cordova/plugin/tizen/ContactUtils", function(require, exports, module) {
+
+/*global tizen:false */
+var Contact = require('cordova/plugin/Contact'),
+    ContactAddress = require('cordova/plugin/ContactAddress'),
+    ContactName = require('cordova/plugin/ContactName'),
+    ContactField = require('cordova/plugin/ContactField'),
+    ContactOrganization = require('cordova/plugin/ContactOrganization'),
+    utils = require('cordova/utils');
+
+
+
+/**
+ * Mappings for each Contact field that may be used in a find operation. Maps
+ * W3C Contact fields to one or more fields in a Tizen contact object.
+ *
+ * Example: user searches with a filter on the Contact 'name' field:
+ *
+ * <code>Contacts.find(['name'], onSuccess, onFail, {filter:'Bob'});</code>
+ *
+ * The 'name' field does not exist in a Tizen contact. Instead, a filter
+ * expression will be built to search the Tizen contacts using the
+ * Tizen 'title', 'firstName' and 'lastName' fields.
+ */
+var fieldMappings = {
+    "id" : ["id"],
+    "displayName" : ["name.displayName"],
+    "nickname": ["name.nicknames"],
+    "name" : [ "name.prefix", "name.firstName", "name.lastName" ],
+    "phoneNumbers" : ["phoneNumbers.number","phoneNumbers.types"],
+    "emails" : ["emails.types", "emails.email"],
+    "addresses" : ["addresses.country","addresses.region","addresses.city","addresses.streetAddress","addresses.postalCode","addresses.country","addresses.types"],
+    "organizations" : ["organizations.name","organizations.department","organizations.office", "organizations.title"],
+    "birthday" : ["birthday"],
+    "note" : ["notes"],
+    "photos" : ["photoURI"],
+    "urls" : ["urls.url", "urls.type"]
+};
+
+/*
+ * Build an array of all of the valid W3C Contact fields. This is used to
+ * substitute all the fields when ["*"] is specified.
+ */
+var allFields = [];
+
+(function() {
+    for ( var key in fieldMappings) {
+        allFields.push(key);
+    }
+})();
+
+/**
+ * Create a W3C ContactAddress object from a Tizen Address object
+ *
+ * @param {String}
+ *            type the type of address (e.g. work, home)
+ * @param {tizen.ContactAddress}
+ *            tizenAddress a Tizen Address object
+ * @return {ContactAddress} a contact address object or null if the specified
+ *         address is null
+ */
+var createContactAddress = function(type, tizenAddress) {
+    if (!tizenAddress) {
+        return null;
+    }
+
+    var isDefault = tizenAddress.isDefault;            //Tizen 2.0
+    var streetAddress = tizenAddress.streetAddress;
+    var locality = tizenAddress.city || "";
+    var region = tizenAddress.region || "";
+    var postalCode = tizenAddress.postalCode || "";
+    var country = tizenAddress.country || "";
+
+    //TODO improve formatted
+    var formatted = streetAddress + ", " + locality + ", " + region + ", " + postalCode + ", " + country;
+
+    var contact = new ContactAddress(isDefault, type, formatted, streetAddress, locality, region, postalCode, country);
+
+    return contact;
+};
+
+module.exports = {
+    /**
+     * Builds Tizen filter expressions for contact search using the
+     * contact fields and search filter provided.
+     *
+     * @param {String[]}
+     *            fields Array of Contact fields to search
+     * @param {String}
+     *            filter Filter, or search string
+     * @param {Boolean}
+     *                 multiple, one contacts or more wanted as result
+     * @return filter expression or null if fields is empty or filter is null or
+     *         empty
+     */
+
+    buildFilterExpression: function(fields, filter) {
+        // ensure filter exists
+        if (!filter || filter === "") {
+            return null;
+        }
+
+        if ((fields.length === 1) && (fields[0] === "*")) {
+            // Cordova enhancement to allow fields value of ["*"] to indicate
+            // all supported fields.
+            fields = allFields;
+        }
+
+        // build a filter expression using all Contact fields provided
+        var compositeFilter = null,
+            attributeFilter = null,
+            filterExpression = null,
+            matchFlag = "CONTAINS",
+            matchValue = filter,
+            attributesArray = [];
+
+        if (fields && utils.isArray(fields)) {
+
+            for ( var field in fields) {
+
+                if (!fields[field]) {
+                    continue;
+                }
+
+                // retrieve Tizen contact fields that map Cordova fields specified
+                // (tizenFields is a string or an array of strings)
+                var tizenFields = fieldMappings[fields[field]];
+
+                if (!tizenFields) {
+                    // does something maps
+                    continue;
+                }
+
+                // construct the filter expression using the Tizen fields
+                for ( var index in tizenFields) {
+                    attributeFilter = new tizen.AttributeFilter(tizenFields[index], matchFlag, matchValue);
+                    if (attributeFilter !== null) {
+                        attributesArray.push(attributeFilter);
+                    }
+                }
+            }
+        }
+
+        // fulfill Tizen find attribute as a single or a composite attribute
+        if (attributesArray.length == 1 ) {
+            filterExpression = attributeFilter[0];
+        } else if (attributesArray.length > 1) {
+            // combine the filters as a Union
+            filterExpression = new tizen.CompositeFilter("UNION", attributesArray);
+        } else {
+            filterExpression = null;
+        }
+
+        return filterExpression;
+    },
+
+
+    /**
+     * Creates a Contact object from a Tizen Contact object, copying only
+     * the fields specified.
+     *
+     * This is intended as a privately used function but it is made globally
+     * available so that a Contact.save can convert a BlackBerry contact object
+     * into its W3C equivalent.
+     *
+     * @param {tizen.Contact}
+     *            tizenContact Tizen Contact object
+     * @param {String[]}
+     *            fields array of contact fields that should be copied
+     * @return {Contact} a contact object containing the specified fields or
+     *         null if the specified contact is null
+     */
+    createContact: function(tizenContact, fields) {
+
+        if (!tizenContact) {
+            return null;
+        }
+
+        // construct a new contact object
+        // always copy the contact id and displayName fields
+        var contact = new Contact(tizenContact.id, tizenContact.name.displayName);
+
+
+        // nothing to do
+        if (!fields || !(utils.isArray(fields)) || fields.length === 0) {
+            return contact;
+        }
+        else if (fields.length === 1 && fields[0] === "*") {
+            // Cordova enhancement to allow fields value of ["*"] to indicate
+            // all supported fields.
+            fields = allFields;
+        }
+
+        // add the fields specified
+        for ( var key in fields) {
+
+            var field = fields[key],
+                index = 0;
+
+            if (!field) {
+                continue;
+            }
+
+            // name
+            if (field.indexOf('name') === 0) {
+                var formattedName = (tizenContact.name.prefix || "");
+
+                if (tizenContact.name.firstName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.firstName || "");
+                }
+
+                if (tizenContact.name.middleName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.middleName || "");
+                }
+
+                if (tizenContact.name.lastName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.lastName || "");
+                }
+
+                //Tizen 2.0
+                if (tizenContact.name.suffix) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.suffix || "");
+                }
+
+                contact.name = new ContactName(
+                        formattedName,
+                        tizenContact.name.lastName,
+                        tizenContact.name.firstName,
+                        tizenContact.name.middleName,
+                        tizenContact.name.prefix,
+                        tizenContact.name.suffix);
+            }
+            // phoneNumbers - Tizen 2.0
+            else if (field.indexOf('phoneNumbers') === 0) {
+                var phoneNumbers = [];
+
+                for (index = 0 ; index < tizenContact.phoneNumbers.length ; ++index) {
+                    phoneNumbers.push(
+                        new ContactField(
+                            'PHONE',
+                            tizenContact.phoneNumbers[index].number,
+                            tizenContact.phoneNumbers[index].isDefault));
+                }
+                contact.phoneNumbers = phoneNumbers.length > 0 ? phoneNumbers : null;
+            }
+
+            // emails - Tizen 2.0
+            else if (field.indexOf('emails') === 0) {
+                var emails = [];
+
+                for (index = 0 ; index < tizenContact.emails.length ; ++index) {
+                    emails.push(
+                        new ContactField(
+                            'EMAILS',
+                            tizenContact.emails[index].email,
+                            tizenContact.emails[index].isDefault));
+                }
+                contact.emails = emails.length > 0 ? emails : null;
+            }
+
+            // addresses Tizen 2.0
+            else if (field.indexOf('addresses') === 0) {
+                var addresses = [];
+
+                for (index = 0 ; index < tizenContact.addresses.length ; ++index) {
+                    addresses.push(
+                         new ContactAddress(
+                            tizenContact.addresses[index].isDefault,
+                            tizenContact.addresses[index].types[0] ? tizenContact.addresses[index].types[0] : "HOME",
+                            null,
+                            tizenContact.addresses[index].streetAddress,
+                            tizenContact.addresses[index].city,
+                            tizenContact.addresses[index].region,
+                            tizenContact.addresses[index].postalCode,
+                            tizenContact.addresses[index].country ));
+                }
+                contact.addresses = addresses.length > 0 ? addresses : null;
+            }
+
+            // birthday
+            else if (field.indexOf('birthday') === 0) {
+                if (utils.isDate(tizenContact.birthday)) {
+                    contact.birthday = tizenContact.birthday;
+                }
+            }
+
+            // note only one in Tizen Contact -Tizen 2.0
+            else if (field.indexOf('note') === 0) {
+                if (tizenContact.notes) {
+                    contact.note = tizenContact.notes[0];
+                }
+            }
+            // organizations Tizen 2.0
+            else if (field.indexOf('organizations') === 0) {
+                var organizations = [];
+
+                for (index = 0 ; index < tizenContact.organizations.length ; ++index) {
+                    organizations.push(
+                            new ContactOrganization(
+                                    (index === 0),
+                                    'WORK',
+                                    tizenContact.organizations.name,
+                                    tizenContact.organizations.department,
+                                    tizenContact.organizations.jobTitle));
+                }
+                contact.organizations = organizations.length > 0 ? organizations : null;
+            }
+
+            // urls
+            else if (field.indexOf('urls') === 0) {
+                var urls = [];
+
+                if (tizenContact.urls) {
+                    for (index = 0 ; index <tizenContact.urls.length ; ++index) {
+                        urls.push(
+                                new ContactField(
+                                        tizenContact.urls[index].type,
+                                        tizenContact.urls[index].url,
+                                        (index === 0)));
+                    }
+                }
+                contact.urls = urls.length > 0 ? urls : null;
+            }
+
+            // photos
+            else if (field.indexOf('photos') === 0) {
+                var photos = [];
+
+                if (tizenContact.photoURI) {
+                    photos.push(new ContactField('URI', tizenContact.photoURI, true));
+                }
+                contact.photos = photos.length > 0 ? photos : null;
+            }
+        }
+
+        return contact;
+    }
+};
+
+});
+
+// file: lib\tizen\plugin\tizen\Device.js
+define("cordova/plugin/tizen/Device", function(require, exports, module) {
+
+/*global tizen:false */
+var channel = require('cordova/channel');
+
+//console.log("TIZEN DEVICE START");
+
+
+// Tell cordova channel to wait on the CordovaInfoReady event - PPL is this useful?
+//channel.waitForInitialization('onCordovaInfoReady');
+
+function Device() {
+    this.version = null;
+    this.uuid = null;
+    this.name = null;
+    this.model = null;
+    this.cordova = CORDOVA_JS_BUILD_LABEL;
+    this.platform = "Tizen";
+   
+    this.getDeviceInfo();
+}
+
+Device.prototype.getDeviceInfo = function() {
+    
+    var deviceCapabilities =  tizen.systeminfo.getCapabilities();
+    
+    if (deviceCapabilities) {
+        
+        this.version = deviceCapabilities.platformVersion;
+        this.uuid = deviceCapabilities.duid;
+        this.model = deviceCapabilities.platformName;
+        this.name = this.model;
+
+        channel.onCordovaInfoReady.fire();
+     }
+     else {
+         console.log("error initializing cordova: ");
+     }
+};
+
+module.exports = new Device();
+
+//console.log("TIZEN DEVICE END");
+
+
+
+});
+
+// file: lib\tizen\plugin\tizen\File.js
+define("cordova/plugin/tizen/File", function(require, exports, module) {
+
+
+//console.log("TIZEN FILE START");
+
+/*global WebKitBlobBuilder:false */
+var FileError = require('cordova/plugin/FileError'),
+    DirectoryEntry = require('cordova/plugin/DirectoryEntry'),
+    FileEntry = require('cordova/plugin/FileEntry'),
+    File = require('cordova/plugin/File'),
+    FileSystem = require('cordova/plugin/FileSystem');
+
+var nativeRequestFileSystem = window.webkitRequestFileSystem,
+    nativeResolveLocalFileSystemURI = window.webkitResolveLocalFileSystemURL,
+    NativeFileReader = window.FileReader;
+
+function getFileSystemName(nativeFs) {
+    return (nativeFs.name.indexOf("Persistent") != -1) ? "persistent" : "temporary";
+}
+
+function makeEntry(entry) {
+    if (entry.isDirectory) {
+        return new DirectoryEntry(entry.name, decodeURI(entry.toURL()));
+    }
+    else {
+        return new FileEntry(entry.name, decodeURI(entry.toURL()));
+    }
+}
+
+module.exports = {
+    /* common/equestFileSystem.js, args = [type, size] */
+    requestFileSystem: function(successCallback, errorCallback, args) {
+        var type = args[0],
+            size = args[1];
+
+        nativeRequestFileSystem(
+            type,
+            size,
+            function(nativeFs) {
+                successCallback(new FileSystem(getFileSystemName(nativeFs), makeEntry(nativeFs.root)));
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/resolveLocalFileSystemURI.js, args= [uri] */
+    resolveLocalFileSystemURI: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                successCallback(makeEntry(entry));
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/DirectoryReader.js, args = [this.path] */
+    readEntries: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(dirEntry) {
+                var reader = dirEntry.createReader();
+
+                reader.readEntries(
+                    function(entries) {
+                        var retVal = [];
+                        for (var i = 0; i < entries.length; i++) {
+                            retVal.push(makeEntry(entries[i]));
+                        }
+                        successCallback(retVal);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/Entry.js , args = [this.fullPath] */
+    getMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getMetadata(
+                    function(metaData) {
+                        successCallback(metaData.modificationTime);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath, metadataObject] */
+    /* PPL to be implemented */
+    setMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            metadata = args[1];
+
+        if (errorCallback) {
+            errorCallback(FileError.NOT_FOUND_ERR);
+        }
+    },
+
+
+    /* args = [srcPath, parent.fullPath, name] */
+    moveTo: function(successCallback, errorCallback, args) {
+        var srcUri = args[0],
+            parentUri = args[1],
+            name = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            srcUri,
+            function(source) {
+                nativeResolveLocalFileSystemURI(
+                    parentUri,
+                    function(parent) {
+                        source.moveTo(
+                            parent,
+                            name,
+                            function(entry) {
+                                successCallback(makeEntry(entry));
+                            },
+                            function(error) {
+                                errorCallback(error.code);
+                        }
+                        );
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [srcPath, parent.fullPath, name] */
+    copyTo: function(successCallback, errorCallback, args) {
+        var srcUri = args[0],
+            parentUri = args[1],
+            name = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            srcUri,
+            function(source) {
+                nativeResolveLocalFileSystemURI(
+                    parentUri,
+                    function(parent) {
+                        source.copyTo(
+                            parent,
+                            name,
+                            function(entry) {
+                                successCallback(makeEntry(entry));
+                            },
+                            function(error) {
+                                errorCallback(error.code);
+                            }
+                        );
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+
+    /* args = [this.fullPath] */
+    remove: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                if (entry.fullPath === "/") {
+                    errorCallback(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                }
+                else {
+                    entry.remove(
+                        successCallback,
+                        function(error) {
+                            errorCallback(error.code);
+                        }
+                    );
+                }
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath] */
+    getParent: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getParent(
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileEntry.js, args = [this.fullPath] */
+    getFileMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.file(
+                    function(file) {
+                        var retVal = new File(file.name, decodeURI(entry.toURL()), file.type, file.lastModifiedDate, file.size);
+                        successCallback(retVal);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/DirectoryEntry.js , args = [this.fullPath, path, options] */
+    getDirectory: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            path = args[1],
+            options = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getDirectory(
+                    path,
+                    options,
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        if (error.code === FileError.INVALID_MODIFICATION_ERR) {
+                            if (options.create) {
+                                errorCallback(FileError.PATH_EXISTS_ERR);
+                            }
+                            else {
+                                errorCallback(FileError.ENCODING_ERR);
+                            }
+                        }
+                        else {
+                            errorCallback(error.code);
+                        }
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath] */
+    removeRecursively: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                if (entry.fullPath === "/") {
+                    errorCallback(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                }
+                else {
+                    entry.removeRecursively(
+                        successCallback,
+                        function(error) {
+                            errorCallback(error.code);
+                        }
+                    );
+                }
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath, path, options] */
+    getFile: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            path = args[1],
+            options = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getFile(
+                    path,
+                    options,
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        if (error.code === FileError.INVALID_MODIFICATION_ERR) {
+                            if (options.create) {
+                                errorCallback(FileError.PATH_EXISTS_ERR);
+                            }
+                            else {
+                                errorCallback(FileError.ENCODING_ERR);
+                            }
+                        }
+                        else {
+                            errorCallback(error.code);
+                        }
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileReader.js, args = execArgs = [filepath, encoding, file.start, file.end] */
+    readAsText: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            encoding = args[1];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsText(file, encoding);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = execArgs = [this._fileName, file.start, file.end] */
+    readAsDataURL: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = execArgs =  [this._fileName, file.start, file.end] */
+    /* PPL, to Be implemented , for now it is pasted from readAsText...*/
+    readAsBinaryString: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+
+    /* args = execArgs =  [this._fileName, file.start, file.end] */
+    /* PPL, to Be implemented , for now it is pasted from readAsText...*/
+    readAsArrayBuffer: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                        successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileWriter.js, args = [this.fileName, text, this.position] */
+    write: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            text = args[1],
+            position = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onWriteEnd = function(evt) {
+                        if(!evt.target.error) {
+                            successCallback(evt.target.position - position);
+                        }
+                        else {
+                            errorCallback(evt.target.error.code);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                entry.createWriter(
+                    function(writer) {
+                        var blob = new WebKitBlobBuilder();
+                        blob.append(text);
+
+                        writer.onwriteend = onWriteEnd;
+                        writer.onerror = onError;
+
+                        writer.seek(position);
+                        writer.write(blob.getBlob('text/plain'));
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fileName, size] */
+    truncate: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            size = args[1];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onWriteEnd = function(evt) {
+                        if(!evt.target.error) {
+                            successCallback(evt.target.length);
+                        }
+                        else {
+                            errorCallback(evt.target.error.code);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                entry.createWriter(
+                    function(writer) {
+                        writer.onwriteend = onWriteEnd;
+                        writer.onerror = onError;
+                        writer.truncate(size);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    }
+};
+
+
+//console.log("TIZEN FILE END");
+
+
+});
+
+// file: lib\tizen\plugin\tizen\FileTransfer.js
+define("cordova/plugin/tizen/FileTransfer", function(require, exports, module) {
+
+/*global WebKitBlobBuilder:false */
+
+
+//console.log("TIZEN FILE TRANSFER START");
+
+var FileEntry = require('cordova/plugin/FileEntry'),
+    FileTransferError = require('cordova/plugin/FileTransferError'),
+    FileUploadResult = require('cordova/plugin/FileUploadResult');
+
+var nativeResolveLocalFileSystemURI = window.webkitResolveLocalFileSystemURL;
+
+function getParentPath(filePath) {
+    var pos = filePath.lastIndexOf('/');
+    return filePath.substring(0, pos + 1);
+}
+
+function getFileName(filePath) {
+    var pos = filePath.lastIndexOf('/');
+    return filePath.substring(pos + 1);
+}
+
+module.exports = {
+    /* common/FileTransfer.js, args = [filePath, server, fileKey, fileName, mimeType, params, trustAllHosts, chunkedMode, headers, this._id, httpMethod] */
+    upload: function(successCallback, errorCallback, args) {
+        var filePath = args[0],
+            server = args[1],
+            fileKey = args[2],
+            fileName = args[3],
+            mimeType = args[4],
+            params = args[5],
+            /*trustAllHosts = args[6],*/
+            chunkedMode = args[7];
+
+        nativeResolveLocalFileSystemURI(
+            filePath,
+            function(entry) {
+                entry.file(
+                    function(file) {
+                        function uploadFile(blobFile) {
+                            var fd = new FormData();
+
+                            fd.append(fileKey, blobFile, fileName);
+
+                            for (var prop in params) {
+                                if(params.hasOwnProperty(prop)) {
+                                    fd.append(prop, params[prop]);
+                                }
+                            }
+                            var xhr = new XMLHttpRequest();
+
+                            xhr.open("POST", server);
+
+                            xhr.onload = function(evt) {
+                                if (xhr.status == 200) {
+                                    var result = new FileUploadResult();
+                                    result.bytesSent = file.size;
+                                    result.responseCode = xhr.status;
+                                    result.response = xhr.response;
+                                    successCallback(result);
+                                }
+                                else if (xhr.status == 404) {
+                                    errorCallback(new FileTransferError(FileTransferError.INVALID_URL_ERR));
+                                }
+                                else {
+                                    errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                                }
+                            };
+
+                            xhr.ontimeout = function(evt) {
+                                errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                            };
+
+                            xhr.send(fd);
+                        }
+
+                        var bytesPerChunk;
+
+                        if (chunkedMode === true) {
+                            bytesPerChunk = 1024 * 1024; // 1MB chunk sizes.
+                        }
+                        else {
+                            bytesPerChunk = file.size;
+                        }
+                        var start = 0;
+                        var end = bytesPerChunk;
+                        while (start < file.size) {
+                            var chunk = file.webkitSlice(start, end, mimeType);
+                            uploadFile(chunk);
+                            start = end;
+                            end = start + bytesPerChunk;
+                        }
+                    },
+                    function(error) {
+                        errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+            }
+        );
+    },
+
+    /* args = [source, target, trustAllHosts, this._id, headers] */
+    download: function(successCallback, errorCallback, args) {
+        var url = args[0],
+            filePath = args[1];
+
+        var xhr = new XMLHttpRequest();
+
+        function writeFile(fileEntry) {
+            fileEntry.createWriter(
+                function(writer) {
+                    writer.onwriteend = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(new FileEntry(fileEntry.name, fileEntry.toURL()));
+                        } else {
+                            errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                        }
+                    };
+
+                    writer.onerror = function(evt) {
+                        errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                    };
+
+                    var builder = new WebKitBlobBuilder();
+                    builder.append(xhr.response);
+
+                    var blob = builder.getBlob();
+                    writer.write(blob);
+                },
+                function(error) {
+                    errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                }
+            );
+        }
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == xhr.DONE) {
+                if (xhr.status == 200 && xhr.response) {
+                    nativeResolveLocalFileSystemURI(
+                        getParentPath(filePath),
+                        function(dir) {
+                            dir.getFile(
+                                getFileName(filePath),
+                                {create: true},
+                                writeFile,
+                                function(error) {
+                                    errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                                }
+                            );
+                        },
+                        function(error) {
+                            errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                        }
+                    );
+                }
+                else if (xhr.status == 404) {
+                    errorCallback(new FileTransferError(FileTransferError.INVALID_URL_ERR));
+                }
+                else {
+                    errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                }
+            }
+        };
+
+        xhr.open("GET", url, true);
+        xhr.responseType = "arraybuffer";
+        xhr.send();
+    },
+
+
+    /* args = [this._id]); */
+    abort: function(successCallback, errorCallback, args) {
+        errorCallback(FileTransferError.ABORT_ERR);
+    }
+
+};
+
+
+//console.log("TIZEN FILE TRANSFER END");
+
+
+});
+
+// file: lib\tizen\plugin\tizen\Media.js
+define("cordova/plugin/tizen/Media", function(require, exports, module) {
+
+/*global Media:false, webkitURL:false */
+var MediaError = require('cordova/plugin/MediaError'),
+    audioObjects = {};
+
+//console.log("TIZEN MEDIA START");
+
+module.exports = {
+
+
+    create: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1];
+
+        console.log("media::create() - id =" + id + ", src =" + src);
+
+        audioObjects[id] = new Audio(src);
+
+        audioObjects[id].onStalledCB = function () {
+            console.log("media::onStalled()");
+
+            audioObjects[id].timer = window.setTimeout(
+                    function () {
+                        audioObjects[id].pause();
+
+                        if (audioObjects[id].currentTime !== 0)
+                            audioObjects[id].currentTime = 0;
+
+                        console.log("media::onStalled() - MEDIA_ERROR -> " + MediaError.MEDIA_ERR_ABORTED);
+
+                        var err = new MediaError(MediaError.MEDIA_ERR_ABORTED, "Stalled");
+
+                        Media.onStatus(id, Media.MEDIA_ERROR, err);
+                    },
+                    2000);
+        };
+
+        audioObjects[id].onEndedCB = function () {
+            console.log("media::onEndedCB() - MEDIA_STATE -> MEDIA_STOPPED");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
+        };
+
+        audioObjects[id].onErrorCB = function () {
+            console.log("media::onErrorCB() - MEDIA_ERROR -> " + event.srcElement.error);
+
+            Media.onStatus(id, Media.MEDIA_ERROR, event.srcElement.error);
+        };
+
+        audioObjects[id].onPlayCB = function () {
+            console.log("media::onPlayCB() - MEDIA_STATE -> MEDIA_STARTING");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STARTING);
+        };
+
+        audioObjects[id].onPlayingCB = function () {
+            console.log("media::onPlayingCB() - MEDIA_STATE -> MEDIA_RUNNING");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_RUNNING);
+        };
+
+        audioObjects[id].onDurationChangeCB = function () {
+            console.log("media::onDurationChangeCB() - MEDIA_DURATION -> " +  audioObjects[id].duration);
+
+            Media.onStatus(id, Media.MEDIA_DURATION, audioObjects[id].duration);
+        };
+
+        audioObjects[id].onTimeUpdateCB = function () {
+            console.log("media::onTimeUpdateCB() - MEDIA_POSITION -> " +  audioObjects[id].currentTime);
+
+            Media.onStatus(id, Media.MEDIA_POSITION, audioObjects[id].currentTime);
+        };
+
+        audioObjects[id].onCanPlayCB = function () {
+            console.log("media::onCanPlayCB()");
+
+            window.clearTimeout(audioObjects[id].timer);
+
+            audioObjects[id].play();
+        };
+      },
+
+    startPlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1], options = args[2];
+
+        console.log("media::startPlayingAudio() - id =" + id + ", src =" + src + ", options =" + options);
+
+        audioObjects[id].addEventListener('canplay', audioObjects[id].onCanPlayCB);
+        audioObjects[id].addEventListener('ended', audioObjects[id].onEndedCB);
+        audioObjects[id].addEventListener('timeupdate', audioObjects[id].onTimeUpdateCB);
+        audioObjects[id].addEventListener('durationchange', audioObjects[id].onDurationChangeCB);
+        audioObjects[id].addEventListener('playing', audioObjects[id].onPlayingCB);
+        audioObjects[id].addEventListener('play', audioObjects[id].onPlayCB);
+        audioObjects[id].addEventListener('error', audioObjects[id].onErrorCB);
+        audioObjects[id].addEventListener('stalled', audioObjects[id].onStalledCB);
+
+        audioObjects[id].play();
+    },
+
+    stopPlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        window.clearTimeout(audioObjects[id].timer);
+
+        audioObjects[id].pause();
+
+        if (audioObjects[id].currentTime !== 0)
+            audioObjects[id].currentTime = 0;
+
+        console.log("media::stopPlayingAudio() - MEDIA_STATE -> MEDIA_STOPPED");
+
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
+
+        audioObjects[id].removeEventListener('canplay', audioObjects[id].onCanPlayCB);
+        audioObjects[id].removeEventListener('ended', audioObjects[id].onEndedCB);
+        audioObjects[id].removeEventListener('timeupdate', audioObjects[id].onTimeUpdateCB);
+        audioObjects[id].removeEventListener('durationchange', audioObjects[id].onDurationChangeCB);
+        audioObjects[id].removeEventListener('playing', audioObjects[id].onPlayingCB);
+        audioObjects[id].removeEventListener('play', audioObjects[id].onPlayCB);
+        audioObjects[id].removeEventListener('error', audioObjects[id].onErrorCB);
+        audioObjects[id].removeEventListener('error', audioObjects[id].onStalledCB);
+    },
+
+    seekToAudio: function (successCallback, errorCallback, args) {
+
+        var id = args[0], milliseconds = args[1];
+
+        console.log("media::seekToAudio()");
+
+        audioObjects[id].currentTime = milliseconds;
+        successCallback( audioObjects[id].currentTime);
+    },
+
+    pausePlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        console.log("media::pausePlayingAudio() - MEDIA_STATE -> MEDIA_PAUSED");
+
+        audioObjects[id].pause();
+
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_PAUSED);
+    },
+
+    getCurrentPositionAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+        console.log("media::getCurrentPositionAudio()");
+        successCallback(audioObjects[id].currentTime);
+    },
+
+    release: function (successCallback, errorCallback, args) {
+        var id = args[0];
+        window.clearTimeout(audioObjects[id].timer);
+        console.log("media::release()");
+    },
+
+    setVolume: function (successCallback, errorCallback, args) {
+        var id = args[0], volume = args[1];
+
+        console.log("media::setVolume()");
+
+        audioObjects[id].volume = volume;
+    },
+
+    startRecordingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1];
+
+        console.log("media::startRecordingAudio() - id =" + id + ", src =" + src);
+
+        function gotStreamCB(stream) {
+            audioObjects[id].src = webkitURL.createObjectURL(stream);
+            console.log("media::startRecordingAudio() - stream CB");
+        }
+
+        function gotStreamFailedCB(error) {
+            console.log("media::startRecordingAudio() - error CB:" + error.toString());
+        }
+
+        if (navigator.webkitGetUserMedia) {
+            audioObjects[id] = new Audio();
+            navigator.webkitGetUserMedia('audio', gotStreamCB, gotStreamFailedCB);
+        } else {
+            console.log("webkitGetUserMedia not supported");
+        }
+        successCallback();
+    },
+
+    stopRecordingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        console.log("media::stopRecordingAudio() - id =" + id);
+
+        audioObjects[id].pause();
+        successCallback();
+    }
+};
+
+//console.log("TIZEN MEDIA END");
+
+
+});
+
+// file: lib\tizen\plugin\tizen\MediaError.js
+define("cordova/plugin/tizen/MediaError", function(require, exports, module) {
+
+
+// The MediaError object already exists on Tizen. This prevents the Cordova
+// version from being defined. This object is used to merge in differences
+// between Tizen and Cordova MediaError objects.
+module.exports = {
+        MEDIA_ERR_NONE_ACTIVE : 0,
+        MEDIA_ERR_NONE_SUPPORTED : 4
+};
+
+});
+
+// file: lib\tizen\plugin\tizen\NetworkStatus.js
+define("cordova/plugin/tizen/NetworkStatus", function(require, exports, module) {
+
+/*global tizen:false */
+var Connection = require('cordova/plugin/Connection');
+
+//console.log("TIZEN CONNECTION AKA NETWORK STATUS START");
+
+module.exports = {
+    getConnectionInfo: function (successCallback, errorCallback) {
+
+        var cncType = Connection.NONE;
+        var infoCount = 0;
+        var deviceCapabilities = null;
+
+
+        function connectionCB() {
+            infoCount++;
+
+            if (infoCount > 1) {
+                if (successCallback) {
+                    successCallback(cncType);
+                }
+            }
+        }
+
+        function errorCB(error) {
+            console.log("Error: " + error.code + "," + error.name + "," + error.message);
+
+            if (errorCallback) {
+                errorCallback();
+            }
+        }
+
+        function wifiSuccessCB(wifi) {
+            if ((wifi.status === "ON")  && (wifi.ipAddress.length !== 0)) {
+                cncType = Connection.WIFI;
+            }
+            connectionCB();
+        }
+
+        function cellularSuccessCB(cell) {
+            if ((cncType === Connection.NONE) && (cell.status === "ON") && (cell.ipAddress.length !== 0)) {
+                cncType = Connection.CELL_2G;
+            }
+            connectionCB();
+        }
+
+        deviceCapabilities = tizen.systeminfo.getCapabilities();
+
+
+        if (deviceCapabilities.wifi) {
+            tizen.systeminfo.getPropertyValue("WIFI_NETWORK", wifiSuccessCB, errorCB);
+        }
+
+        tizen.systeminfo.getPropertyValue("CELLULAR_NETWORK", cellularSuccessCB, errorCB);
+
+    }
+};
+
+//console.log("TIZEN CONNECTION AKA NETWORK STATUS END");
+
+});
+
+// file: lib\tizen\plugin\tizen\Notification.js
+define("cordova/plugin/tizen/Notification", function(require, exports, module) {
+
+var SoundBeat = require('cordova/plugin/tizen/SoundBeat');
+
+/* TODO: get resource path from app environment? */
+var soundBeat = new SoundBeat(["./sounds/beep.wav"]);
+
+
+//console.log("TIZEN NOTIFICATION START");
+
+
+module.exports = {
+
+    alert: function(message, alertCallback, title, buttonName) {
+        return this.confirm(message, alertCallback, title, buttonName);
+    },
+
+    confirm: function(message, confirmCallback, title, buttonLabels) {
+        var index            =    null,
+            overlayElement    =    null,
+            popup            =    null,
+            element         =    null,
+            titleString        =     null,
+            messageString    =    null,
+            buttonString    =    null,
+            buttonsArray    =    null;
+
+
+        console.log ("message" , message);
+        console.log ("confirmCallback" , confirmCallback);
+        console.log ("title" , title);
+        console.log ("buttonLabels" , buttonLabels);
+
+        titleString = '<div class="popup-title"><p>' + title + '</p></div>';
+        messageString = '<div class="popup-text"><p>' + message + '</p></div>';
+        buttonString = '<div class="popup-button-bg"><ul>';
+
+        switch(typeof(buttonLabels))
+        {
+        case "string":
+            buttonsArray = buttonLabels.split(",");
+
+            if (buttonsArray === null) {
+                buttonsArray = buttonLabels;
+            }
+
+            for (index in buttonsArray) {
+                buttonString += '<li><input id="popup-button-' + buttonsArray[index]+
+                                '" type="button" value="' + buttonsArray[index] + '" /></li>';
+                console.log ("index: ", index,"");
+                console.log ("buttonsArray[index]: ", buttonsArray[index]);
+                console.log ("buttonString: ", buttonString);
+            }
+            break;
+
+        case "array":
+            if (buttonsArray === null) {
+                buttonsArray = buttonLabels;
+            }
+
+            for (index in buttonsArray) {
+                buttonString += '<li><input id="popup-button-' + buttonsArray[index]+
+                                '" type="button" value="' + buttonsArray[index] + '" /></li>';
+                console.log ("index: ", index,"");
+                console.log ("buttonsArray[index]: ", buttonsArray[index]);
+                console.log ("buttonString: ", buttonString);
+            }
+            break;
+        default:
+            console.log ("cordova/plugin/tizen/Notification, default, buttonLabels: ", buttonLabels);
+            break;
+        }
+
+        buttonString += '</ul></div>';
+
+        overlayElement = document.createElement("div");
+        overlayElement.className = 'ui-popupwindow-screen';
+
+        overlayElement.style.zIndex = 1001;
+        overlayElement.style.width = "100%";
+        overlayElement.style.height = "100%";
+        overlayElement.style.top = 0;
+        overlayElement.style.left = 0;
+        overlayElement.style.margin = 0;
+        overlayElement.style.padding = 0;
+        overlayElement.style.position = "absolute";
+
+        popup = document.createElement("div");
+        popup.className = "ui-popupwindow";
+        popup.style.position = "fixed";
+        popup.style.zIndex = 1002;
+        popup.innerHTML = titleString + messageString + buttonString;
+
+        document.body.appendChild(overlayElement);
+        document.body.appendChild(popup);
+
+        function createListener(button) {
+            return function() {
+                document.body.removeChild(overlayElement);
+                document.body.removeChild(popup);
+                confirmCallback(button.value);
+            };
+        }
+
+       for (index in buttonsArray) {
+           console.log ("index: ", index);
+
+           element = document.getElementById("popup-button-" + buttonsArray[index]);
+           element.addEventListener("click", createListener(element), false);
+       }
+    },
+
+    prompt: function (message, promptCallback, title, buttonLabels) {
+        console.log ("message" , message);
+        console.log ("promptCallback" , promptCallback);
+        console.log ("title" , title);
+        console.log ("buttonLabels" , buttonLabels);
+
+        //a temporary implementation using window.prompt()
+        // note taht buttons are cancel ok (in that order)
+        // gonna to return based on having OK  / Cancel
+        // ok is 1, cancel is 2
+
+        var result = prompt(message);
+
+        if (promptCallback && (typeof promptCallback == "function")) {
+            promptCallback((result === null) ? 2 : 1, result);
+        }
+    },
+
+    vibrate: function(milliseconds) {
+        console.log ("milliseconds" , milliseconds);
+
+        if (navigator.vibrate) {
+            navigator.vibrate(milliseconds);
+        }
+        else {
+            console.log ("cordova/plugin/tizen/Notification, vibrate API does not exist");
+        }
+    },
+
+    beep: function(count) {
+        console.log ("count" , count);
+        soundBeat.play(count);
+    }
+};
+
+//console.log("TIZEN NOTIFICATION END");
+
+
+});
+
+// file: lib\tizen\plugin\tizen\SoundBeat.js
+define("cordova/plugin/tizen/SoundBeat", function(require, exports, module) {
+
+/*global webkitAudioContext:false */
+/*
+ *  SoundBeat
+ * used by Notification Manager beep method
+ *
+ * This class provides sounds play
+ *
+ * uses W3C  Web Audio API
+ * uses BufferLoader object
+ *
+ * NOTE: the W3C Web Audio doc tells we do not need to recreate the audio
+ *       context to play a sound but only the audiosourcenode (createBufferSource)
+ *       in the WebKit implementation we have to.
+ *
+ */
+
+var BufferLoader = require('cordova/plugin/tizen/BufferLoader');
+
+function SoundBeat(urlList) {
+    this.context = null;
+    this.urlList = urlList || null;
+    this.buffers = null;
+}
+
+/*
+ * This method play a loaded sounds on the Device
+ * @param {Number} times Number of times to play loaded sounds.
+ *
+ */
+SoundBeat.prototype.play = function(times) {
+
+    var i = 0, sources = [], that = this;
+
+    function finishedLoading (bufferList) {
+        that.buffers = bufferList;
+
+        for (i = 0; i < that.buffers.length ; i +=1) {
+            if (that.context) {
+                sources[i] = that.context.createBufferSource();
+
+                sources[i].buffer = that.buffers[i];
+                sources[i].connect (that.context.destination);
+
+                sources[i].loop = true;
+                sources[i].noteOn (0);
+                sources[i].noteOff(sources[i].buffer.duration * times);
+            }
+        }
+    }
+
+    if (webkitAudioContext !== null) {
+        this.context = new webkitAudioContext();
+    }
+    else {
+        console.log ("SoundBeat.prototype.play, w3c web audio api not supported");
+        this.context = null;
+    }
+
+    if (this.context === null) {
+        console.log ("SoundBeat.prototype.play, cannot create audio context object");
+        return;
+    }
+
+    this.bufferLoader = new BufferLoader (this.context, this.urlList, finishedLoading);
+    if (this.bufferLoader === null) {
+        console.log ("SoundBeat.prototype.play, cannot create buffer loader object");
+        return;
+    }
+
+    this.bufferLoader.load();
+};
+
+module.exports = SoundBeat;
+
+});
+
+// file: lib\tizen\plugin\tizen\contacts.js
+define("cordova/plugin/tizen/contacts", function(require, exports, module) {
+
+/*global tizen:false */
+var ContactError = require('cordova/plugin/ContactError'),
+    utils = require('cordova/utils'),
+    ContactUtils = require('cordova/plugin/tizen/ContactUtils');
+
+module.exports = {
+    /**
+     * Returns an array of Contacts matching the search criteria.
+     *
+     * @return array of Contacts matching search criteria
+     */
+    find : function(fields, successCB, failCB, options) {
+
+        // Success callback is required. Throw exception if not specified.
+        if (typeof successCB !== 'function') {
+            throw new TypeError("You must specify a success callback for the find command.");
+        }
+
+        // Search qualifier is required and cannot be empty.
+        if (!fields || !(utils.isArray(fields)) || fields.length === 0) {
+            if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.INVALID_ARGUMENT_ERROR));
+            }
+            return;
+        }
+
+        // options are optional
+        var filter ="",
+            multiple = false,
+            contacts = [],
+            tizenFilter = null;
+
+        if (options) {
+            filter = options.filter || "";
+            multiple =  options.multiple || false;
+        }
+
+        if (filter){
+            tizenFilter = ContactUtils.buildFilterExpression(fields, filter);
+        }
+
+        tizen.contact.getDefaultAddressBook().find(
+            function(tizenContacts) {
+                if (multiple) {
+                    for (var index in tizenContacts) {
+                        contacts.push(ContactUtils.createContact(tizenContacts[index], fields));
+                    }
+                }
+                else {
+                    contacts.push(ContactUtils.createContact(tizenContacts[0], fields));
+                }
+
+                // return results
+                successCB(contacts);
+            },
+            function(error) {
+                if (typeof failCB === 'function') {
+                    failCB(ContactError.UNKNOWN_ERROR);
+                }
+            },
+            tizenFilter,
+            null);
+    }
+};
+
+});
+
+// file: lib\tizen\plugin\tizen\contacts\symbols.js
+define("cordova/plugin/tizen/contacts/symbols", function(require, exports, module) {
+
+require('cordova/plugin/contacts/symbols');
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/windows8/console', 'navigator.console');
+modulemapper.merges('cordova/plugin/tizen/contacts', 'navigator.contacts');
+modulemapper.merges('cordova/plugin/tizen/Contact', 'Contact');
 
 });
 
-// file: lib\windows8\plugin\windows8\notification\plugininit.js
-define("cordova/plugin/windows8/notification/plugininit", function(require, exports, module) {
+// file: lib\tizen\plugin\tizen\manager.js
+define("cordova/plugin/tizen/manager", function(require, exports, module) {
 
-window.alert = window.alert || require("cordova/plugin/notification").alert;
-window.confirm = window.confirm || require("cordova/plugin/notification").confirm;
+var cordova = require('cordova');
 
+module.exports = {
+    exec: function (successCallback, errorCallback, clazz, action, args) {
+        var plugin = require('cordova/plugin/tizen/' + clazz);
+
+        if (plugin && typeof plugin[action] === 'function') {
+            var result = plugin[action](successCallback, errorCallback, args);
+            return result || {status: cordova.callbackStatus.NO_RESULT};
+        }
+
+        return {"status" : cordova.callbackStatus.CLASS_NOT_FOUND_EXCEPTION, "message" : "Function " + clazz + "::" + action + " cannot be found"};
+    },
+    resume: function () {},
+    pause: function () {},
+    destroy: function () {}
+};
 
 });
 
@@ -7933,9 +8608,7 @@ function UUIDcreatePart(length) {
 
 });
 
-
 window.cordova = require('cordova');
-
 // file: lib\scripts\bootstrap.js
 
 (function (context) {
@@ -8010,7 +8683,7 @@ window.cordova = require('cordova');
 
 }(window));
 
-// file: lib\scripts\bootstrap-windows8.js
+// file: lib\scripts\bootstrap-tizen.js
 
 require('cordova/channel').onNativeReady.fire();
 
@@ -8051,7 +8724,7 @@ require('cordova/channel').onNativeReady.fire();
     // See plugman's plugin_loader.js for the details of this object.
     // This function is only called if the really is a plugins array that isn't empty.
     // Otherwise the XHR response handler will just call finishPluginLoading().
-    function handlePluginsObject(modules) {
+    function handlePluginsObject(modules, path) {
         // First create the callback for when all plugins are loaded.
         var mapper = context.cordova.require('cordova/modulemapper');
         onScriptLoadingComplete = function() {
@@ -8085,35 +8758,49 @@ require('cordova/channel').onNativeReady.fire();
 
         // Now inject the scripts.
         for (var i = 0; i < modules.length; i++) {
-            injectScript(modules[i].file);
+            injectScript(path + modules[i].file);
         }
     }
 
-
-    // Try to XHR the cordova_plugins.json file asynchronously.
-    try { // we commented we were going to try, so let us actually try and catch
-        var xhr = new context.XMLHttpRequest();
-        xhr.onload = function() {
-            // If the response is a JSON string which composes an array, call handlePluginsObject.
-            // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
-            var obj = this.responseText && JSON.parse(this.responseText);
-            if (obj && obj instanceof Array && obj.length > 0) {
-                handlePluginsObject(obj);
-            } else {
-                finishPluginLoading();
-            }
-        };
-        xhr.onerror = function() {
-            finishPluginLoading();
-        };
-        xhr.open('GET', 'cordova_plugins.json', true); // Async
-        xhr.send();
+    // Find the root of the app
+    var path = '';
+    var scripts = document.getElementsByTagName('script');
+    var term = 'cordova.js';
+    for (var n = scripts.length-1; n>-1; n--) {
+        var src = scripts[n].src;
+        if (src.indexOf(term) == (src.length - term.length)) {
+            path = src.substring(0, src.length - term.length);
+            break;
+        }
     }
-    catch(err){
+    // Try to XHR the cordova_plugins.json file asynchronously.
+    var xhr = new XMLHttpRequest();
+    xhr.onload = function() {
+        // If the response is a JSON string which composes an array, call handlePluginsObject.
+        // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
+        var obj;
+        try {
+            obj = (this.status == 0 || this.status == 200) && this.responseText && JSON.parse(this.responseText);
+        } catch (err) {
+            // obj will be undefined.
+        }
+        if (Array.isArray(obj) && obj.length > 0) {
+            handlePluginsObject(obj, path);
+        } else {
+            finishPluginLoading();
+        }
+    };
+    xhr.onerror = function() {
+        finishPluginLoading();
+    };
+    var plugins_json = path + 'cordova_plugins.json';
+    try { // we commented we were going to try, so let us actually try and catch
+        xhr.open('GET', plugins_json, true); // Async
+        xhr.send();
+    } catch(err){
         finishPluginLoading();
     }
 }(window));
 
 
-
-})();var PhoneGap = cordova;
+})();

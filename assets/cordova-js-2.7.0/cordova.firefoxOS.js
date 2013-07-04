@@ -1,5 +1,5 @@
-// Platform: webos
-// 2.7.0rc1-92-g10923cb
+// Platform: firefoxos
+// 2.7.0rc1-128-gbab9173
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-92-g10923cb';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-128-gbab9173';
 // file: lib\scripts\require.js
 
 var require,
@@ -788,7 +788,7 @@ module.exports = {
 };
 });
 
-// file: lib\webos\exec.js
+// file: lib\firefoxos\exec.js
 define("cordova/exec", function(require, exports, module) {
 
 /**
@@ -807,13 +807,10 @@ define("cordova/exec", function(require, exports, module) {
  */
 
 var plugins = {
-    "Device": require('cordova/plugin/webos/device'),
-    "NetworkStatus": require('cordova/plugin/webos/network'),
-    "Compass": require('cordova/plugin/webos/compass'),
-    "Camera": require('cordova/plugin/webos/camera'),
-    "Accelerometer" : require('cordova/plugin/webos/accelerometer'),
-    "Notification" : require('cordova/plugin/webos/notification'),
-    "Geolocation": require('cordova/plugin/webos/geolocation')
+    "Device": require('cordova/plugin/firefoxos/device'),
+    "NetworkStatus": require('cordova/plugin/firefoxos/network'),
+    "Accelerometer" : require('cordova/plugin/firefoxos/accelerometer')
+    //"Notification" : require('cordova/plugin/firefoxos/notification')
 };
 
 module.exports = function(success, fail, service, action, args) {
@@ -932,152 +929,14 @@ exports.reset();
 
 });
 
-// file: lib\webos\platform.js
+// file: lib\firefoxos\platform.js
 define("cordova/platform", function(require, exports, module) {
 
-/*global Mojo:false */
-
-var service=require('cordova/plugin/webos/service'),
-    cordova = require('cordova');
-
 module.exports = {
-    id: "webos",
+    id: "firefoxos",
     initialize: function() {
-        var modulemapper = require('cordova/modulemapper');
-
-        modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
-
-        modulemapper.merges('cordova/plugin/webos/service', 'navigator.service');
-        modulemapper.merges('cordova/plugin/webos/application', 'navigator.application');
-        modulemapper.merges('cordova/plugin/webos/window', 'navigator.window');
-        modulemapper.merges('cordova/plugin/webos/orientation', 'navigator.orientation');
-        modulemapper.merges('cordova/plugin/webos/keyboard', 'navigator.keyboard');
-        modulemapper.merges('cordova/plugin/webos/pmloglib', 'window.webOS');
-
-        modulemapper.mapModules(window);
-
-        if (window.PalmSystem) {
-            window.PalmSystem.stageReady();
-        }
-
-        // create global Mojo object if it does not exist
-        Mojo = window.Mojo || {};
-
-        //connection monitor subscription
-        navigator.connectionMonitor = navigator.connectionMonitor || {};
-        navigator.connectionMonitor.start = function() {
-            navigator.connectionMonitor.request = service.Request('palm://com.palm.connectionmanager', {
-                method: 'getstatus',
-                parameters: { subscribe: true },
-                onSuccess: function (result) {
-                    console.log("subscribe:result:"+JSON.stringify(result));
-                    if(!result.isInternetConnectionAvailable) {
-                        if (navigator.onLine) {
-                            console.log("Firing event:offline");
-                            cordova.fireDocumentEvent("offline");
-                        }
-                    } else {
-                        console.log("Firing event:online");
-                        cordova.fireDocumentEvent("online");
-                    }
-                },
-                onFailure: function(e) {
-                    console.error("subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: true
-            });
-        };
-        navigator.connectionMonitor.start();
-
-        //locale monitor subscription
-        navigator.localeMonitor = navigator.localeMonitor || {};
-        navigator.localeMonitor.start = function() {
-            navigator.localeMonitor.request = service.Request('palm://com.palm.systemservice', {
-                method: 'getPreferences',
-                parameters: {
-                    keys: ["localeInfo"],
-                },
-                onSuccess: function (inResponse) {
-                    if(navigator.localeInfo) {
-                        if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
-                                (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
-                                (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
-                            console.log("Firing event:localechange");
-                            cordova.fireDocumentEvent("localechange");
-                        }
-                    }
-                    navigator.localeInfo = inResponse.localeInfo;
-                },
-                onFailure: function(e) {
-                    console.error("subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: true
-            });
-        };
-        navigator.localeMonitor.start();
-
-        // wait for deviceready before listening and firing document events
-        document.addEventListener("deviceready", function () {
-
-            // LunaSysMgr calls this when the windows is maximized or opened.
-            window.Mojo.stageActivated = function() {
-                console.log("stageActivated");
-                cordova.fireDocumentEvent("resume");
-                // start to listen for network connection changes if needed
-                if(!navigator.connectionMonitor.request) {
-                    navigator.connectionMonitor.start();
-                }
-
-                // start to listen for locale info changes if needed
-                if(!navigator.localeMonitor.request) {
-                    navigator.localeMonitor.start();
-                }
-            };
-            // LunaSysMgr calls this when the windows is minimized or closed.
-            window.Mojo.stageDeactivated = function() {
-                console.log("stageDeactivated");
-                cordova.fireDocumentEvent("pause");
-                // stop subscription-based monitors on stage deactivation
-                if(navigator.connectionMonitor.request) {
-                    navigator.connectionMonitor.request.cancel();
-                    navigator.connectionMonitor.request = undefined;
-                }
-                if(navigator.localeMonitor.request) {
-                    navigator.localeMonitor.request.cancel();
-                    navigator.localeMonitor.request = undefined;
-                }
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is hidden
-            window.Mojo.hide = function() {
-                console.log("hide");
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is shown
-            window.Mojo.show = function() {
-                console.log("show");
-            };
-
-            // LunaSysMgr calls this whenever an app is "launched;"
-            window.Mojo.relaunch = function() {
-                // need to return true to tell sysmgr the relaunch succeeded.
-                // otherwise, it'll try to focus the app, which will focus the first
-                // opened window of an app with multiple windows.
-
-                var lp=JSON.parse(PalmSystem.launchParams) || {};
-
-                if (lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
-                    console.log("event:ToggleAppMenu");
-                    cordova.fireDocumentEvent("menubutton");
-                }
-
-                console.log("relaunch");
-                return true;
-            };
-        });
     }
 };
-
 });
 
 // file: lib\common\plugin\Acceleration.js
@@ -4527,7 +4386,7 @@ module.exports = function(successCallback, errorCallback, message, forceAsync) {
 
 });
 
-// file: lib\webos\plugin\file\symbols.js
+// file: lib\common\plugin\file\symbols.js
 define("cordova/plugin/file/symbols", function(require, exports, module) {
 
 
@@ -4535,8 +4394,6 @@ var modulemapper = require('cordova/modulemapper'),
     symbolshelper = require('cordova/plugin/file/symbolshelper');
 
 symbolshelper(modulemapper.defaults);
-modulemapper.clobbers('cordova/plugin/webos/requestfilesystem', 'requestFileSystem');
-modulemapper.clobbers('cordova/plugin/webos/filereader', 'FileReader');
 
 });
 
@@ -4573,6 +4430,104 @@ var modulemapper = require('cordova/modulemapper');
 
 modulemapper.clobbers('cordova/plugin/FileTransfer', 'FileTransfer');
 modulemapper.clobbers('cordova/plugin/FileTransferError', 'FileTransferError');
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\accelerometer.js
+define("cordova/plugin/firefoxos/accelerometer", function(require, exports, module) {
+
+var cordova = require('cordova'),
+    callback;
+
+module.exports = {
+    start: function (win, fail, args) {
+        window.removeEventListener("devicemotion", callback);
+        callback = function (motion) {
+            win({
+                x: motion.accelerationIncludingGravity.x,
+                y: motion.accelerationIncludingGravity.y,
+                z: motion.accelerationIncludingGravity.z,
+                timestamp: motion.timestamp
+            });
+        };
+        window.addEventListener("devicemotion", callback);
+    },
+    stop: function (win, fail, args) {
+        window.removeEventListener("devicemotion", callback);
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\device.js
+define("cordova/plugin/firefoxos/device", function(require, exports, module) {
+
+var channel = require('cordova/channel'),
+    cordova = require('cordova');
+
+// Tell cordova channel to wait on the CordovaInfoReady event
+channel.waitForInitialization('onCordovaInfoReady');
+
+module.exports = {
+    getDeviceInfo : function(win, fail, args){
+        win({
+            platform: "Firefox OS",
+            version: "0.0.1",
+            model: "Beta Phone",
+            name: "Beta Phone", // deprecated: please use device.model
+            uuid: "somestring",
+            cordova: CORDOVA_JS_BUILD_LABEL
+        });
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\network.js
+define("cordova/plugin/firefoxos/network", function(require, exports, module) {
+
+var cordova = require('cordova');
+
+module.exports = {
+    getConnectionInfo: function (win, fail, args) {
+        win("3G");
+    }
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\notification.js
+define("cordova/plugin/firefoxos/notification", function(require, exports, module) {
+
+module.exports = {
+
+    vibrate: function(milliseconds) {
+        console.log ("milliseconds" , milliseconds);
+
+        if (navigator.vibrate) {
+            navigator.vibrate(milliseconds);
+        } else {
+            console.log ("cordova/plugin/firefoxos/notification, vibrate API does not exist");
+        }
+    }
+
+};
+
+});
+
+// file: lib\firefoxos\plugin\firefoxos\orientation.js
+define("cordova/plugin/firefoxos/orientation", function(require, exports, module) {
+
+// user must have event listener registered for orientation to work
+// window.addEventListener("orientationchange", onorientationchange, true);
+
+module.exports = {
+
+    getCurrentOrientation: function() {
+          return window.screen.orientation;
+    }
+
+};
 
 });
 
@@ -5710,14 +5665,13 @@ module.exports = {
 
 });
 
-// file: lib\webos\plugin\notification\symbols.js
+// file: lib\common\plugin\notification\symbols.js
 define("cordova/plugin/notification/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/notification', 'navigator.notification');
-modulemapper.merges('cordova/plugin/webos/notification', 'navigator.notification');
 
 });
 
@@ -5841,922 +5795,6 @@ define("cordova/plugin/splashscreen/symbols", function(require, exports, module)
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
-
-});
-
-// file: lib\webos\plugin\webos\accelerometer.js
-define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
-
-var callback;
-module.exports = {
-    /*
-     * Tells WebOS to put higher priority on accelerometer resolution. Also relaxes the internal garbage collection events.
-     * @param {Boolean} state
-     * Dependencies: Mojo.windowProperties
-     * Example:
-     *         navigator.accelerometer.setFastAccelerometer(true)
-     */
-    setFastAccelerometer: function(state) {
-        navigator.windowProperties.fastAccelerometer = state;
-        navigator.window.setWindowProperties();
-    },
-
-    /*
-     * Starts the native acceleration listener.
-     */
-    start: function(win,fail,args) {
-        console.error("webos plugin accelerometer start");
-        window.removeEventListener("acceleration", callback);
-        callback = function(event) {
-            var accel = new Acceleration(event.accelX*-9.81, event.accelY*-9.81, event.accelZ*-9.81);
-            win(accel);
-        };
-        document.addEventListener("acceleration", callback);
-    },
-    stop: function (win,fail,args) {
-        console.error("webos plugin accelerometer stop");
-        window.removeEventListener("acceleration", callback);
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\application.js
-define("cordova/plugin/webos/application", function(require, exports, module) {
-
-module.exports = {
-    isActivated: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            return inWindow.PalmSystem.isActivated;
-        }
-        return false;
-    },
-
-    /*
-     * Tell webOS to activate the current page of your app, bringing it into focus.
-     * Example:
-     *         navigator.application.activate();
-     */
-    activate: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.activate();
-        }
-    },
-
-    /*
-     * Tell webOS to deactivate your app.
-     * Example:
-     *        navigator.application.deactivate();
-     */
-    deactivate: function(inWindow) {
-        inWindow = inWindow || window;
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.deactivate();
-        }
-    },
-
-    /*
-     * Returns the identifier of the current running application (e.g. com.yourdomain.yourapp).
-     * Example:
-     *        navigator.application.getIdentifier();
-     */
-    getIdentifier: function() {
-        return PalmSystem.identifier;
-    },
-
-    fetchAppId: function() {
-        if (window.PalmSystem) {
-            // PalmSystem.identifier: <appid> <processid>
-            return PalmSystem.identifier.split(" ")[0];
-        }
-    },
-    fetchAppInfo: function() {
-        if(!this.appInfo) {
-            var appInfoPath = this.fetchAppRootPath() + "appinfo.json";
-            var appInfoJSON = undefined;
-            if(window.palmGetResource) {
-                try {
-                    appInfoJSON = palmGetResource(appInfoPath);
-                } catch(e) {
-                    console.log("error reading appinfo.json" + e.message);
-                }
-            } else {
-                var req = new XMLHttpRequest();
-                req.open('GET', appInfoPath + "?palmGetResource=true", false);
-                req.send(null);
-                if(req.status >= 200 && req.status < 300) {
-                    appInfoJSON = req.responseText;
-                } else {
-                    console.log("error reading appinfo.json");
-                }
-            }
-            if(appInfoJSON) {
-                this.appInfo = enyo.json.parse(appInfoJSON);
-            }
-        }
-        return this.appInfo;
-    },
-    fetchAppRootPath: function() {
-        var base = window.location.href;
-        if('baseURI' in window.document) {
-            base = window.document.baseURI;
-        } else {
-            var baseTags = window.document.getElementsByTagName("base");
-            if(baseTags.length > 0) {
-                base = baseTags[0].href;
-            }
-        }
-        var match = base.match(new RegExp(".*:\/\/[^#]*\/"));
-        if(match) {
-            return match[0];
-        }
-        return "";
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\camera.js
-define("cordova/plugin/webos/camera", function(require, exports, module) {
-
-var service = require('cordova/plugin/webos/service');
-
-module.exports = {
-    takePicture: function(successCallback, errorCallback, options) {
-        var filename = (options || {}).filename | "";
-
-        service.Request('palm://com.palm.applicationManager', {
-            method: 'launch',
-            parameters: {
-            id: 'com.palm.app.camera',
-            params: {
-                    appId: 'com.palm.app.camera',
-                    name: 'capture',
-                    sublaunch: true,
-                    filename: filename
-                }
-            },
-            onSuccess: successCallback,
-            onFailure: errorCallback
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\compass.js
-define("cordova/plugin/webos/compass", function(require, exports, module) {
-
-var CompassHeading = require('cordova/plugin/CompassHeading'),
-    CompassError = require('cordova/plugin/CompassError');
-
-module.exports = {
-    getCurrentHeading: function(onSuccess, onError) {
-        // only TouchPad and Pre3 have a Compass/Gyro
-        if (window.device.name !== "TouchPad" && window.device.name !== "Prē3") {
-            onError({code: CompassError.COMPASS_NOT_SUPPORTED});
-        } else {
-            console.log("webos plugin compass getheading");
-            var onReadingChanged = function (e) {
-                var heading = new CompassHeading(e.magHeading, e.trueHeading);
-                document.removeEventListener("compass", onReadingChanged);
-                onSuccess(heading);
-            };
-            document.addEventListener("compass", onReadingChanged);
-        }
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\device.js
-define("cordova/plugin/webos/device", function(require, exports, module) {
-
-var service = require('cordova/plugin/webos/service');
-
-module.exports = {
-    getDeviceInfo: function(successCallback, failureCallback) {
-        var deviceInfo = undefined;
-        try {
-            deviceInfo = JSON.parse(PalmSystem.deviceInfo);
-        } catch(e) {
-            failureCallback(e)
-        }
-        service.Request('palm://com.palm.preferences/systemProperties', {
-            method:"Get",
-            parameters:{"key": "com.palm.properties.nduid"},
-            onSuccess: function(result) {
-                successCallback({
-                    name: deviceInfo.modelName,
-                    model: deviceInfo.modelName,
-                    version: deviceInfo.platformVersion,
-                    platform: "webOS",
-                    cordova: "2.7.0",
-                    uuid: result["com.palm.properties.nduid"]
-                });
-            },
-            onFailure: function(err) {
-                successCallback({
-                    name: deviceInfo.modelName,
-                    model: deviceInfo.modelName,
-                    version: deviceInfo.platformVersion,
-                    platform: "webOS",
-                    cordova: "2.7.0",
-                    uuid: ""
-                });
-            }
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\file.js
-define("cordova/plugin/webos/file", function(require, exports, module) {
-
-/**
- * Constructor.
- * name {DOMString} name of the file, without path information
- * fullPath {DOMString} the full path of the file, including the name
- * type {DOMString} mime type
- * lastModifiedDate {Date} last modified date
- * size {Number} size of the file in bytes
- */
-
-var File = function(name, fullPath, type, lastModifiedDate, size){
-    this.name = name || '';
-    this.fullPath = fullPath || null;
-    this.type = type || null;
-    this.lastModifiedDate = lastModifiedDate || null;
-    this.size = size || 0;
-};
-
-module.exports = File;
-
-});
-
-// file: lib\webos\plugin\webos\filereader.js
-define("cordova/plugin/webos/filereader", function(require, exports, module) {
-
-var FileError = require('cordova/plugin/FileError'),
-    ProgressEvent = require('cordova/plugin/ProgressEvent');
-
-var FileReader = function() {
-    this.fileName = "";
-
-    this.readyState = 0; // FileReader.EMPTY
-
-    // File data
-    this.result = null;
-
-    // Error
-    this.error = null;
-
-    // Event handlers
-    this.onloadstart = null;    // When the read starts.
-    this.onprogress = null;     // While reading (and decoding) file or fileBlob data, and reporting partial file data (progess.loaded/progress.total)
-    this.onload = null;         // When the read has successfully completed.
-    this.onerror = null;        // When the read has failed (see errors).
-    this.onloadend = null;      // When the request has completed (either in success or failure).
-    this.onabort = null;        // When the read has been aborted. For instance, by invoking the abort() method.
-};
-
-FileReader.prototype.readAsText = function(file, encoding) {
-    console.error("webos plugin filereader readastext:" + file);
-    //Mojo has no file i/o yet, so we use an xhr. very limited
-
-    // Already loading something
-    if (this.readyState == FileReader.LOADING) {
-        throw new FileError(FileError.INVALID_STATE_ERR);
-    }
-
-    // LOADING state
-    this.readyState = FileReader.LOADING;
-
-    // If loadstart callback
-    if (typeof this.onloadstart === "function") {
-        this.onloadstart(new ProgressEvent("loadstart", {target:this}));
-    }
-
-    // Default encoding is UTF-8
-    var enc = encoding ? encoding : "UTF-8";
-
-    var me = this;
-
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-        console.error("onreadystatechange:"+xhr.readyState+" "+xhr.status);
-        if (xhr.readyState == 4) {
-            if (xhr.status == 200 && xhr.responseText) {
-                console.error("file read completed");
-                // Save result
-                me.result = xhr.responseText;
-
-                // If onload callback
-                if (typeof me.onload === "function") {
-                    me.onload(new ProgressEvent("load", {target:me}));
-                }
-
-                // DONE state
-                me.readyState = FileReader.DONE;
-
-                // If onloadend callback
-                if (typeof me.onloadend === "function") {
-                    me.onloadend(new ProgressEvent("loadend", {target:me}));
-                }
-
-            } else {
-                // If DONE (cancelled), then don't do anything
-                if (me.readyState === FileReader.DONE) {
-                    return;
-                }
-
-                // DONE state
-                me.readyState = FileReader.DONE;
-
-                me.result = null;
-
-                // Save error
-                me.error = new FileError(FileError.NOT_FOUND_ERR);
-
-                // If onerror callback
-                if (typeof me.onerror === "function") {
-                    me.onerror(new ProgressEvent("error", {target:me}));
-                }
-
-                // If onloadend callback
-                if (typeof me.onloadend === "function") {
-                    me.onloadend(new ProgressEvent("loadend", {target:me}));
-                }
-            }
-        }
-    };
-    xhr.open("GET", file, true);
-    xhr.send();
-};
-
-module.exports = FileReader;
-
-});
-
-// file: lib\webos\plugin\webos\geolocation.js
-define("cordova/plugin/webos/geolocation", function(require, exports, module) {
-
-var service = require('cordova/plugin/webos/service');
-
-module.exports = {
-    getLocation: function(successCallback, errorCallback, options) {
-        console.error("webos plugin geolocation getlocation");
-        var request = service.Request('palm://com.palm.location', {
-            method: "getCurrentPosition",
-            onSuccess: function(event) {
-                var alias={};
-                alias.lastPosition = {
-                    coords: {
-                        latitude: event.latitude,
-                        longitude: event.longitude,
-                        altitude: (event.altitude >= 0 ? event.altitude: null),
-                        speed: (event.velocity >= 0 ? event.velocity: null),
-                        heading: (event.heading >= 0 ? event.heading: null),
-                        accuracy: (event.horizAccuracy >= 0 ? event.horizAccuracy: null),
-                        altitudeAccuracy: (event.vertAccuracy >= 0 ? event.vertAccuracy: null)
-                    },
-                    timestamp: new Date().getTime()
-                };
-
-                successCallback(alias.lastPosition);
-            },
-            onFailure: function() {
-                errorCallback();
-            }
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\keyboard.js
-define("cordova/plugin/webos/keyboard", function(require, exports, module) {
-
-var _isShowing = null,
-    _manual = null;
-
-module.exports = {
-    types: {
-        text: 0,
-        password: 1,
-        search: 2,
-        range: 3,
-        email: 4,
-        number: 5,
-        phone: 6,
-        url: 7,
-        color: 8
-    },
-    isShowing: function() {
-        return !!_isShowing;
-    },
-    show: function(type){
-        if(this.isManualMode()) {
-            PalmSystem.keyboardShow(type || 0);
-        }
-    },
-    hide: function(){
-        if(this.isManualMode()) {
-            PalmSystem.keyboardHide();
-        }
-    },
-    setManualMode: function(mode){
-        _manual = mode;
-        PalmSystem.setManualKeyboardEnabled(mode);
-    },
-    isManualMode: function(){
-        return _manual || false;
-    },
-    forceShow: function(inType){
-        this.setManualMode(true);
-        PalmSystem.keyboardShow(inType || 0);
-    },
-    forceHide: function(){
-        this.setManualMode(true);
-        PalmSystem.keyboardHide();
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\network.js
-define("cordova/plugin/webos/network", function(require, exports, module) {
-
-var service=require('cordova/plugin/webos/service'),
-    Connection = require('cordova/plugin/Connection');
-
-module.exports = {
-    /**
-     * Get connection info
-     *
-     * @param {Function} successCallback The function to call when the Connection data is available
-     * @param {Function} errorCallback The function to call when there is an error getting the Connection data. (OPTIONAL)
-     */
-    getConnectionInfo: function (successCallback, errorCallback) {
-        // Get info
-        console.log("webos Plugin: NetworkStatus - getConnectionInfo");
-
-        service.Request('palm://com.palm.connectionmanager', {
-            method: 'getstatus',
-            parameters: {},
-            onSuccess: function (result) {
-                console.log("result:"+JSON.stringify(result));
-
-                var info={};
-                if (!result.isInternetConnectionAvailable) { info.type=Connection.NONE; }
-                if (result.wifi && result.wifi.onInternet) { info.type=Connection.WIFI; }
-                if (result.wired && result.wired.onInternet) { info.type=Connection.ETHERNET; }
-                if (result.wan && result.wan.state==="connected") { info.type=Connection.CELL_2G; }
-
-                successCallback(info.type);
-            },
-            onFailure: errorCallback
-        });
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\notification.js
-define("cordova/plugin/webos/notification", function(require, exports, module) {
-
-module.exports = {
-    /*
-     * adds a dashboard to the WebOS app
-     * @param {String} url
-     * @param {String} html
-     * Example:
-     *        navigator.notification.newDashboard("dashboard.html");
-     */
-    newDashboard: function(url, html) {
-        var win = window.open(url, "_blank", "attributes={\"window\":\"dashboard\"}");
-        html && win.document.write(html);
-        win.PalmSystem.stageReady();
-    },
-
-    /*
-     * Displays a banner notification. If specified, will send your 'response' object as data via the 'palmsystem' DOM event.
-     * If no 'icon' filename is specified, will use a small version of your application icon.
-     * @param {String} message
-     * @param {Object} response
-     * @param {String} icon
-     * @param {String} soundClass class of the sound; supported classes are: "ringtones", "alerts", "alarm", "calendar", "notification"
-     * @param {String} soundFile partial or full path to the sound file
-     * @param {String} soundDurationMs of sound in ms
-     * Example:
-     *        navigator.notification.showBanner('test message');
-     */
-    showBanner: function(message, response, icon, soundClass, soundFile, soundDurationMs) {
-        response = response || {
-            banner: true
-        };
-        PalmSystem.addBannerMessage(message, JSON.stringify(response), icon, soundClass, soundFile, soundDurationMs);
-    },
-
-    /**
-     * Remove a banner from the banner area. The category parameter defaults to 'banner'. Will not remove
-     * messages that are already displayed.
-     * @param {String} category
-            Value defined by the application and usually same one used in {@link showBanner}.
-            It is used if you have more than one kind of banner message.
-     */
-    removeBannerMessage: function(category) {
-        var bannerKey = category || 'banner';
-        var bannerId = this.banners.get(bannerKey);
-        if (bannerId) {
-            try {
-                PalmSystem.removeBannerMessage(bannerId);
-            } catch(removeBannerException) {
-                window.debug.error(removeBannerException.toString());
-            }
-        }
-    },
-
-    /*
-     * Remove all pending banner messages from the banner area. Will not remove messages that are already displayed.
-     */
-    clearBannerMessage: function() {
-        PalmSystem.clearBannerMessage();
-    },
-
-    /*
-     * This function vibrates the device
-     * @param {number} duration The duration in ms to vibrate for.
-     * @param {number} intensity The intensity of the vibration
-     */
-    vibrate_private: function(duration, intensity) {
-        //the intensity for palm is inverted; 0=high intensity, 100=low intensity
-        //this is opposite from our api, so we invert
-        if (isNaN(intensity) || intensity > 100 || intensity <= 0)
-        intensity = 0;
-        else
-        intensity = 100 - intensity;
-
-        // if the app id does not have the namespace "com.palm.", an error will be thrown here
-        //this.vibhandle = new Mojo.Service.Request("palm://com.palm.vibrate", {
-        this.vibhandle = navigator.service.Request("palm://com.palm.vibrate", {
-            method: 'vibrate',
-            parameters: {
-                'period': intensity,
-                'duration': duration
-            }
-        },
-        false);
-    },
-
-    vibrate: function(param) {
-        PalmSystem.playSoundNotification('vibrate');
-    },
-    /*
-     * Plays the specified sound
-     * @param {String} soundClass class of the sound; supported classes are: "ringtones", "alerts", "alarm", "calendar", "notification"
-     * @param {String} soundFile partial or full path to the sound file
-     * @param {String} soundDurationMs of sound in ms
-     */
-    beep: function(param) {
-        PalmSystem.playSoundNotification('alerts');
-    },
-
-    getRootWindow: function() {
-        var w = window.opener || window.rootWindow || window.top || window;
-        if(!w.setTimeout) { // use this window as the root if we don't have access to the real root.
-            w = window;
-        }
-        return w;
-    },
-
-    open: function(inOpener, inUrl, inName, inAttributes, inWindowInfo) {
-        var url = inUrl;
-        var a = inAttributes && JSON.stringify(inAttributes);
-        a = "attributes=" + a;
-        var i = inWindowInfo ? inWindowInfo + ", " : "";
-        return inOpener.open(url, inName, i + a);
-    },
-
-    openWindow: function(inUrl, inName, inParams, inAttributes, inWindowInfo) {
-        //var attributes = inAttributes || {};
-        //attributes.window = attributes.window || "card";
-        // NOTE: make the root window open all windows.
-        return this.open(this.getRootWindow(), inUrl, inName || "", inAttributes, inWindowInfo);
-    },
-
-    alert: function(message,callback,title,buttonName) {
-        var inAttributes = {};
-        //inAttributes.window = "card"; // create card
-        inAttributes.window = "popupalert"; // create popup
-        //inAttributes.window="dashboard"; // create dashboard
-        var html='<html><head><script>setTimeout(function(f){var el=window.document.getElementById("b1");console.error(el);el.addEventListener("click",function(f){window.close();},false);},500);</script></head><body>'+message+'<br/><button id="b1">'+buttonName+'</button></body></html>';
-        var inName="PopupAlert";
-        var inUrl="";
-        var inParams={};
-        var inHeight=120;
-        var w = this.openWindow(inUrl, inName, inParams, inAttributes, "height=" + (inHeight || 200));
-        w.document.write(html);
-        w.PalmSystem.stageReady();
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\orientation.js
-define("cordova/plugin/webos/orientation", function(require, exports, module) {
-
-module.exports = {
-    setOrientation: function(orientation) {
-        PalmSystem.setWindowOrientation(orientation);
-    },
-
-    /*
-     * Returns the current window orientation
-     * orientation is one of 'up', 'down', 'left', 'right', or 'free'
-     */
-    getCurrentOrientation: function() {
-          return PalmSystem.windowOrientation;
-    }
-};
-
-});
-
-// file: lib\webos\plugin\webos\pmloglib.js
-define("cordova/plugin/webos/pmloglib", function(require, exports, module) {
-//* Convenience wrapper around PmLogLib logging API
-
-(function() {
-    //* @protected
-
-    // Log level constants
-    var levelNone      = -1;
-    var levelEmergency =  0;
-    var levelAlert     =  1;
-    var levelCritical  =  2;
-    var levelError     =  3;
-    var levelWarning   =  4;
-    var levelNotice    =  5;
-    var levelInfo      =  6;
-    var levelDebug     =  7;
-    var isObject = function(obj) {
-        return !!obj && (typeof obj === "object") && (Object.prototype.toString.call(obj) !== "[object Array]");
-    };
-
-    // Log function stringifies and escapes keyVals, and passes to PmLogString
-    var log = function(level, messageId, keyVals, freeText) {
-        if (window.PalmSystem) {
-            if (keyVals && !isObject(keyVals)) {
-                level = levelError;
-                keyVals = { msgid: messageId };
-                messageId = "MISMATCHED_FMT";
-                freeText = null;
-                console.warn("webOSLog called with invalid format: keyVals must be an object");
-            }
-            if (!messageId && level != levelDebug) {
-                console.warn("webOSLog called with invalid format: messageId was empty");
-            }
-            if (keyVals) {
-                keyVals = JSON.stringify(keyVals);
-            }
-            if(window.PalmSystem.PmLogString) {
-                window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
-            } else {
-                console.error("Unable to send log; PmLogString not found in this version of PalmSystem");
-            }
-        }
-    };
-
-    //* @public
-
-    module.exports = {
-        //* Call PalmSystem.PmLogString with "emergency" level
-        emergency: function(messageId, keyVals, freeText) {
-            log(levelEmergency, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "alert" level
-        alert: function(messageId, keyVals, freeText) {
-            log(levelAlert, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "critical" level
-        critical: function(messageId, keyVals, freeText) {
-            log(levelCritical, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "error" level
-        error: function(messageId, keyVals, freeText) {
-            log(levelError, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "warning" level
-        warning: function(messageId, keyVals, freeText) {
-            log(levelWarning, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "notice" level
-        notice: function(messageId, keyVals, freeText) {
-            log(levelNotice, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "info" level
-        info: function(messageId, keyVals, freeText) {
-            log(levelInfo, messageId, keyVals, freeText);
-        },
-        //* Call PalmSystem.PmLogString with "debug" level.  Note, messageId and keyVals are not allowed.
-        debug: function(freeText) {
-            log(levelDebug, "", "", freeText);
-        }
-    };
-}());
-});
-
-// file: lib\webos\plugin\webos\requestfilesystem.js
-define("cordova/plugin/webos/requestfilesystem", function(require, exports, module) {
-
-module.exports = function(type,size,successCallback,errorCallback) {
-    console.error("requestFileSystem");
-
-    var theFileSystem={};
-    theFileSystem.name="webOS";
-    theFileSystem.root={};
-    theFileSystem.root.name="Root";
-
-    theFileSystem.root.getFile=function(filename,options,successCallback,errorCallback) {
-        console.error("getFile");
-        if (options.create) { errorCallback(); }
-        var theFile=filename;
-        successCallback(theFile);
-    };
-
-    successCallback(theFileSystem);
-};
-
-});
-
-// file: lib\webos\plugin\webos\service.js
-define("cordova/plugin/webos/service", function(require, exports, module) {
-
-function Service() { }
-
-Service.prototype.Request = function (uri, params) {
-    var req = new LS2Request(uri, params);
-    return req;
-}
-
-function LS2Request(uri, params) {
-    this.uri = uri;
-    params = params || {};
-    if(params.method) {
-        if(this.uri.charAt(this.uri.length-1) != "/") {
-            this.uri += "/";
-        }
-        this.uri += params.method;
-    }
-    if(typeof params.onSuccess === 'function') {
-        this.onSuccess = params.onSuccess;
-    }
-    if(typeof params.onFailure === 'function') {
-    this.onFailure = params.onFailure;
-    }
-    if(typeof params.onComplete === 'function') {
-    this.onComplete = params.onComplete;
-    }
-    this.params = (typeof params.parameters === 'object') ? params.parameters : {};
-    this.subscribe = params.subscribe || false;
-    if(this.subscribe) {
-        this.params.subscribe = params.subscribe;
-    }
-    if(this.params.subscribe) {
-        this.subscribe = this.params.subscribe;
-    }
-    this.resubscribe = params.resubscribe || false;
-    this.send();
-}
-
-LS2Request.prototype.send = function() {
-    this.bridge = new PalmServiceBridge();
-    var self = this;
-    this.bridge.onservicecallback = this.callback = function(msg) {
-        var parsedMsg;
-        if(self.cancelled) {
-            return;
-        }
-        try {
-            parsedMsg = JSON.parse(msg);
-        } catch(e) {
-            parsedMsg = {
-                errorCode: -1,
-                errorText: msg
-            };
-        }
-        if((parsedMsg.errorCode || parsedMsg.returnValue==false) && self.onFailure) {
-            self.onFailure(parsedMsg);
-            if(self.resubscribe && self.subscribe) {
-                self.delayID = setTimeout(function() {
-                    self.send();
-                }, LS2Request.resubscribeDelay);
-            }
-        } else if(self.onSuccess) {
-            self.onSuccess(parsedMsg);
-        }
-        if(self.onComplete) {
-            self.onComplete(parsedMsg);
-        }
-    };
-    this.bridge.call(this.uri, JSON.stringify(this.params));
-};
-
-LS2Request.prototype.cancel = function() {
-    this.cancelled = true;
-    if(this.resubscribeJob) {
-            clearTimeout(this.delayID)
-        }
-        if(this.bridge) {
-            this.bridge.cancel();
-            this.bridge = undefined;
-        }
-};
-
-LS2Request.prototype.toString = function() {
-    return "[LS2Request]";
-};
-
-LS2Request.resubscribeDelay = 10000;
-
-module.exports = new Service();
-
-});
-
-// file: lib\webos\plugin\webos\window.js
-define("cordova/plugin/webos/window", function(require, exports, module) {
-
-module.exports={
-    launchParams: function() {
-        return JSON.parse(PalmSystem.launchParams) || {};
-    },
-    /*
-     * This is a thin wrapper for 'window.open()' which optionally sets document contents to 'html', and calls 'PalmSystem.stageReady()'
-     * on your new card. Note that this new card will not come with your framework (if any) or anything for that matter.
-     * @param {String} url
-     * @param {String} html
-     * Example:
-     *        navigator.window.newCard('about:blank', '<html><body>Hello again!</body></html>');
-     */
-    newCard: function(url, html) {
-        var win = window.open(url || "");
-        if (html)
-            win.document.write(html);
-        win.PalmSystem.stageReady();
-    },
-
-    /*
-     * Enable or disable full screen display (full screen removes the app menu bar and the rounded corners of the screen).
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.setFullScreen(true);
-     */
-    setFullScreen: function(state) {
-        // valid state values are: true or false
-        PalmSystem.enableFullScreenMode(state);
-    },
-
-    /*
-     * used to set the window properties of the WebOS app
-     * @param {Object} props
-     * Example:
-     *         private method used by other member functions - ideally we shouldn't call this method
-     */
-    setWindowProperties: function(inWindow, inProps) {
-        if(arguments.length==1) {
-            inProps = inWindow;
-            inWindow = window;
-        }
-        if(inWindow.PalmSystem) {
-            inWindow.PalmSystem.setWindowProperties(inProps);
-        }
-    },
-
-    /*
-     * Enable or disable screen timeout. When enabled, the device screen will not dim. This is useful for navigation, clocks or other "dock" apps.
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.blockScreenTimeout(true);
-     */
-    blockScreenTimeout: function(state) {
-        navigator.windowProperties.blockScreenTimeout = state;
-        this.setWindowProperties(navigator.windowProperties);
-    },
-
-    /*
-     * Sets the lightbar to be a little dimmer for screen locked notifications.
-     * @param {Boolean} state
-     * Example:
-     *        navigator.window.setSubtleLightbar(true);
-     */
-    setSubtleLightbar: function(state) {
-        navigator.windowProperties.setSubtleLightbar = state;
-        this.setWindowProperties(navigator.windowProperties);
-    }
-};
 
 });
 
@@ -7017,10 +6055,6 @@ window.cordova = require('cordova');
     }, platformInitChannelsArray);
 
 }(window));
-
-// file: lib\scripts\bootstrap-webos.js
-
-require('cordova/channel').onNativeReady.fire();
 
 // file: lib\scripts\plugin_loader.js
 
