@@ -20,4 +20,5 @@
 }
 .cordova-sample-result {
 	padding:8px;
+	white-space:pre-wrap;
 }
