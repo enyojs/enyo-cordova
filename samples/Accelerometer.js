@@ -20,6 +20,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Accelerometer API not supported on this platform.");
 		}
+		return true;
 	},
 	toggleWatch: function(inSender, inEvent) {
 		if(navigator.accelerometer && navigator.accelerometer.watchAcceleration) {
@@ -38,6 +39,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Accelerometer API not supported on this platform.");
 		}
+		return true;
 	},
 	accelSuccess: function(inResponse) {
 		this.$.result.setContent("Acceleration X: " + inResponse.x + "<br />" +
@@ -46,6 +48,6 @@ enyo.kind({
 				"Timestamp: " + inResponse.timestamp);
 	},
 	accelFailure: function(inError) {
-		this.$.result.setContent("Unable to retrieve accelermeter data.");
+		this.$.result.setContent("Unable to retrieve accelerometer data.");
 	}
 });

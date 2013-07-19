@@ -29,17 +29,20 @@ enyo.kind({
 			navigator.notification.beep(1);
 			this.$.result.setContent("Beep executed");
 		}
+		return true;
 	},
 	vibrateButton: function(inSender, inEvent) {
 		if(navigator.notification && navigator.notification.vibrate) {
 			navigator.notification.vibrate(1000);
 			this.$.result.setContent("Vibrate executed");
 		}
+		return true;
 	},
 	alertButton: function(inResponse) {
 		if(navigator.notification && navigator.notification.alert) {
 			navigator.notification.alert("This is an alert notification.", enyo.bind(this, "alertCallback"));
 		}
+		return true;
 	},
 	alertCallback: function() {
 		this.$.result.setContent("Alert executed");
@@ -51,6 +54,7 @@ enyo.kind({
 			navigator.notification.alert("This is a confirmation notification, which has multiple button options.",
 					enyo.bind(this, "confirmCallback"));
 		}
+		return true;
 	},
 	confirmCallback: function(inButtonIndex) {
 		this.$.result.setContent("Confirm executed; button with index " + inButtonIndex + " was selected");
@@ -62,9 +66,10 @@ enyo.kind({
 			navigator.notification.alert("This is a prompt notification with a text input and button options.",
 					enyo.bind(this, "promptCallback"));
 		}
+		return true;
 	},
 	promptCallback: function(inResponse) {
 		this.$.result.setContent("Prompt executed; button with index " + inResponse.buttonIndex + " was selected, " +
 				"returning the inputted text \"" + inResponse.input1 + "\"");
-	},
+	}
 });

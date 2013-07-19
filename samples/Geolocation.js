@@ -21,6 +21,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Geolocation API not supported on this platform.");
 		}
+		return true;
 	},
 	toggleWatch: function(inSender, inEvent) {
 		if(navigator.geolocation && navigator.geolocation.watchPosition) {
@@ -40,6 +41,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Geolocation API not supported on this platform.");
 		}
+		return true;
 	},
 	geoSuccess: function(inResponse) {
 		this.$.result.setContent("Latitude: " + inResponse.coords.latitude + "<br/>" +
