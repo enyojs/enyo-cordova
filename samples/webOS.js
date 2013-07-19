@@ -175,12 +175,6 @@ enyo.kind({
 		}
 		return true;
 	},
-	deactivate: function(inSender, inEvent) {
-		//webOS.window.deactivate();
-		PalmSystem.deactivate();
-		this.error("DEACTIVATING");
-		return true;
-	},
 	newCard: function(inSender, inEvent) {
 		//first argument can alternately be an html filepath
 		//second argument is any html to be written to the new card
