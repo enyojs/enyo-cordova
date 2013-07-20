@@ -2,7 +2,7 @@
 	"sourcePath":"../../..",
 	"name": "Cordova",
 	"ns": "cordova.sample",
-	"loadPackages": "$lib/enyo-cordova $lib/enyo-cordova $lib/onyx",
+	"loadPackages": "$lib/enyo-cordova $lib/enyo-cordova/samples",
 	"samples": [
 		{"name": "Accelerometer", "path":"$lib/enyo-cordova/samples/Accelerometer", "css":"sample"},	
 		{"name": "Compass", "path":"$lib/enyo-cordova/samples/Compass"},
