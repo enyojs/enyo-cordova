@@ -49,5 +49,11 @@ enyo.kind({
 	},
 	accelFailure: function(inError) {
 		this.$.result.setContent("Unable to retrieve accelerometer data.");
+	},
+	destroy: function() {
+		if(this.watchID) {
+			navigator.accelerometer.clearWatch(this.watchID);
+		}
+		this.inherited(arguments);
 	}
 });

@@ -48,5 +48,11 @@ enyo.kind({
 	},
 	compassFailure: function(inError) {
 		this.$.result.setContent("Unable to retrieve compass data.");
+	},
+	destroy: function() {
+		if(this.watchID) {
+			navigator.compass.clearWatch((this.watchID);
+		}
+		this.inherited(arguments);
 	}
 });

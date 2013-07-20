@@ -55,5 +55,11 @@ enyo.kind({
 	},
 	geoFailure: function(inError) {
 		this.$.result.setContent("Unable to retrieve geolocation data.<br/>" + inError.code + ": " + inError.message);
+	},
+	destroy: function() {
+		if(this.watchID) {
+			navigator.geolocation.clearWatch(this.watchID);
+		}
+		this.inherited(arguments);
 	}
 });
