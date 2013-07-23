@@ -48,7 +48,7 @@ enyo.kind({
 		this.$.result.setContent("Alert executed");
 	},
 	confirmButton: function(inError) {
-		if(enyo.platform.webos) { //legacy webOS devices
+		if(enyo.platform.webos && enyo.platform.webos<=3) { //legacy webOS devices
 			this.$.result.setContent("Confirm not supported on this version of webOS");
 		} else if(navigator.notification && navigator.notification.alert) {
 			navigator.notification.alert("This is a confirmation notification, which has multiple button options.",
@@ -60,7 +60,7 @@ enyo.kind({
 		this.$.result.setContent("Confirm executed; button with index " + inButtonIndex + " was selected");
 	},
 	promptButton: function(inError) {
-		if(enyo.platform.webos) { //legacy webOS devices
+		if(enyo.platform.webos && enyo.platform.webos<=3) { //legacy webOS devices
 			this.$.result.setContent("Prompt not supported on this version of webOS");
 		} else if(navigator.notification && navigator.notification.alert) {
 			navigator.notification.alert("This is a prompt notification with a text input and button options.",

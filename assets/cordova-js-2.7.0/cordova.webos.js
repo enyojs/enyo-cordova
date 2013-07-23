@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-152-gc80418d
+// 2.7.0rc1-157-g48d40fa
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-152-gc80418d';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-157-g48d40fa';
 // file: lib\scripts\require.js
 
 var require,
@@ -6079,8 +6079,7 @@ define("cordova/plugin/webos/extras/notification", function(require, exports, mo
 
 //Supplemental functions for existing Notification module
 
-var ua = navigator.userAgent.toLowerCase();
-var isLegacy = ((ua.indexOf("webos")>-1) || (ua.indexOf("hpwos")>-1));
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var service = (isLegacy) ? undefined : require('cordova/plugin/webos/service');
 
 /*
@@ -6184,6 +6183,15 @@ module.exports = {
                 parameters: {toastId:id}
             });
         }
+    },
+
+    /**
+     * Checks whether or not the current device supports creation of dashboard windows.
+     *
+     * @return Boolean                      Whether or not dashboard windows are supported.
+     */
+    supportsDashboard: function() {
+        return isLegacy;
     },
 
     /**
@@ -6539,7 +6547,10 @@ module.exports={
      * Used to set the window properties of the WebOS app. Generally should not be needed by developers directly.
      *
      * @param {Object} inWindow             A window object to reference from; if omitted, uses current window. (OPTIONAL)
-     * @param {Object} inProps              Properties to apply to the app window.
+     * @param {Object} inProps              Properties to apply to the app window. Valid properties include:
+     *                                          {Boolean}  blockScreenTimeout      If true, the screen will not dim or turn off in the absence of user activity. If false, the timeout behavior will be reinstated.
+     *                                          {Boolean}  setSubtleLightbar       If true, the light bar will be made somewhat dimmer than normal. If false, it will return to normal.
+     *                                          {Boolean}  fastAccelerometer       If true, the accelerometer rate will increase to 30 hz; false by default, rate is at 4 hz. Note fast rate is active only for apps when maximized.
      */
     setWindowProperties: function(inWindow, inProps) {
         if(arguments.length==1) {
@@ -6556,7 +6567,7 @@ module.exports={
      * Used to get the window properties of the WebOS app. Generally should not be needed by developers directly.
      *
      * @param {Object} inWindow             A window object to reference from; if omitted, uses current window. (OPTIONAL)
-     * @return Object                       App window properties.
+     * @return Object                       App window properties that have been set thus far.
      */
     getWindowProperties: function(inWindow) {
         inWindow = inWindow || window;
@@ -6570,7 +6581,7 @@ module.exports={
      * @param {Boolean} state               Whether or not to block screen timeout
      */
     blockScreenTimeout: function(state) {
-        webOS.window.properties = state;
+        webOS.window.properties.blockScreenTimeout = state;
         this.setWindowProperties(navigator.windowProperties);
     },
 
@@ -6862,8 +6873,7 @@ module.exports = {
 // file: lib\webos\plugin\webos\notification.js
 define("cordova/plugin/webos/notification", function(require, exports, module) {
 
-var ua = navigator.userAgent.toLowerCase();
-var isLegacy = ((ua.indexOf("webos")>-1) || (ua.indexOf("hpwos")>-1));
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var legacyAlert = function(callback, args) {
     var root = window.opener || window.rootWindow || window.top || window;
     if(!root.setTimeout) {

@@ -97,7 +97,7 @@ enyo.kind({
 			//Extended Notification API
 			//Dashboard only available on old webOS 1-3
 			this.toastIDs = [];
-			if(enyo.platform.webos) {
+			if(navigator.notification.supportsDashboard()) {
 				this.$.dash.show();
 			}
 			
@@ -154,7 +154,7 @@ enyo.kind({
 	showDashboard: function(inSender, inEvent) {
 		//first argument can alternately be an html filepath
 		//second argument is any html to be written to the dashboard
-		var html = "<html><head></head><body style=\"" + ((enyo.platform.webos && device.version.indexOf("3.")!=0) ? "background-color: black;" : "") +"\"><h3 style=\"color:white;\">This is a sample dashboard window</body></html>";
+		var html = "<html><head></head><body style=\"" + ((device.version.indexOf("3.")!=0) ? "background-color: black;" : "") +"\"><h3 style=\"color:white;\">This is a sample dashboard window</body></html>";
 		navigator.notification.showDashboard(undefined, html);
 		return true;
 	},
