@@ -11,7 +11,7 @@ enyo.kind({
 	],
 	deviceready: function(inSender, inEvent) {
 		if(window.device) {
-			this.$.result.setContent(enyo.json.stringify(window.device));
+			this.$.result.setContent(enyo.json.stringify(window.device, null, "\t"));
 		}
 	}
 });

@@ -19,6 +19,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Compass API not supported on this platform.");
 		}
+		return true;
 	},
 	toggleWatch: function(inSender, inEvent) {
 		if(navigator.compass && navigator.compass.watchHeading) {
@@ -37,6 +38,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Compass API not supported on this platform.");
 		}
+		return true;
 	},
 	compassSuccess: function(inResponse) {
 		this.$.result.setContent("Magnetic Heading: " + inResponse.magneticHeading + "<br />" +
@@ -46,5 +48,11 @@ enyo.kind({
 	},
 	compassFailure: function(inError) {
 		this.$.result.setContent("Unable to retrieve compass data.");
+	},
+	destroy: function() {
+		if(this.watchID) {
+			navigator.compass.clearWatch((this.watchID);
+		}
+		this.inherited(arguments);
 	}
 });
