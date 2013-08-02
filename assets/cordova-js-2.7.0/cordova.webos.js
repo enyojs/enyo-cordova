@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-157-g48d40fa
+// 2.7.0rc1-160-gb9a7818
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-157-g48d40fa';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-160-gb9a7818';
 // file: lib\scripts\require.js
 
 var require,
@@ -987,8 +987,10 @@ module.exports = {
                 var lp=JSON.parse(PalmSystem.launchParams) || {};
                 if (lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
                     cordova.fireDocumentEvent("menubutton");
+                    return true;
+                } else {
+                    cordova.fireDocumentEvent("relaunch");
                 }
-                return true;
             };
         });
     }
