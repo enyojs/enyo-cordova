@@ -19,48 +19,48 @@ enyo.kind({
 		if(window.PalmSystem) {
 			this.$.supported.addContent(", localechange");
 		}
-		this.$.result.setContent("<i>deviceready</i> event occurred");
+		this.$.result.setContent("<i>deviceready</i> event occurred<br>");
 	},
 	pause: function(inSender, inEvent) {
-		this.$.result.addContent("<i>pause</i> event occurred");
+		this.$.result.addContent("<i>pause</i> event occurred<br>");
 	},
 	resume: function(inSender, inEvent) {
-		this.$.result.addContent("<i>resume</i> event occurred");
+		this.$.result.addContent("<i>resume</i> event occurred<br>");
 	},
 	online: function(inSender, inEvent) {
-		this.$.result.addContent("<i>online</i> event occurred");
+		this.$.result.addContent("<i>online</i> event occurred<br>");
 	},
 	offline: function(inSender, inEvent) {
-		this.$.result.addContent("<i>offline</i> event occurred");
+		this.$.result.addContent("<i>offline</i> event occurred<br>");
 	},
 	backbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>backbutton</i> event occurred");
+		this.$.result.addContent("<i>backbutton</i> event occurred<br>");
 	},
 	batterycritical: function(inSender, inEvent) {
-		this.$.result.addContent("<i>batterycritical</i> event occurred");
+		this.$.result.addContent("<i>batterycritical</i> event occurred<br>");
 	},
 	batterylow: function(inSender, inEvent) {
-		this.$.result.addContent("<i>batterylow</i> event occurred");
+		this.$.result.addContent("<i>batterylow</i> event occurred<br>");
 	},
 	menubutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>menubutton</i> event occurred");
+		this.$.result.addContent("<i>menubutton</i> event occurred<br>");
 	},
 	searchbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>searchbutton</i> event occurred");
+		this.$.result.addContent("<i>searchbutton</i> event occurred<br>");
 	},
 	startcallbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>startcallbutton</i> event occurred");
+		this.$.result.addContent("<i>startcallbutton</i> event occurred<br>");
 	},
 	endcallbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>endcallbutton</i> event occurred");
+		this.$.result.addContent("<i>endcallbutton</i> event occurred<br>");
 	},
 	volumedownbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>volumedownbutton</i> event occurred");
+		this.$.result.addContent("<i>volumedownbutton</i> event occurred<br>");
 	},
 	volumeupbutton: function(inSender, inEvent) {
-		this.$.result.addContent("<i>volumeupbutton</i> event occurred");
+		this.$.result.addContent("<i>volumeupbutton</i> event occurred<br>");
 	},
 	localechange: function(inSender, inEvent) {
-		this.$.result.addContent("<i>localechange</i> event occurred");
+		this.$.result.addContent("<i>localechange</i> event occurred<br>");
 	}
 });
