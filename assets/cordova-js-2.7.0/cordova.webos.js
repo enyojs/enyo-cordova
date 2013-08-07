@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-175-g32ae33c
+// 2.7.0rc1-176-g005831a
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-175-g32ae33c';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-176-g005831a';
 // file: lib\scripts\require.js
 
 var require,
@@ -962,7 +962,7 @@ module.exports = {
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
             // Check for support for page visibility api
-            if(typeof document.webkitHidden !== "undefined") {
+            if(typeof document.webkitHidden !== "undefined" && false) {
                 document.addEventListener("webkitvisibilitychange", function(e) {
                     if(document.webkitHidden) {
                         cordova.fireDocumentEvent("resume");
