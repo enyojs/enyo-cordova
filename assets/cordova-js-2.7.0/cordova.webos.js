@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-176-g005831a
+// 2.7.0rc1-177-g02b12a7
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-176-g005831a';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-177-g02b12a7';
 // file: lib\scripts\require.js
 
 var require,
@@ -983,12 +983,12 @@ module.exports = {
                 
                 //emulate new webOS.launch event on old devices, which coincidentally
                 //don't support the new page visibility api
-                var lp = JSON.parse(PalmSystem.launchParams) || {};
+                var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
                 cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
                 
                 // LunaSysMgr calls this whenever an app is "launched;"
                 window.Mojo.relaunch = function(e) {
-                    var lp = JSON.parse(PalmSystem.launchParams) || {};
+                    var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
                     if(lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
                         cordova.fireDocumentEvent("menubutton");
                         return true;
