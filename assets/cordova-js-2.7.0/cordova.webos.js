@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-160-gb9a7818
+// 2.7.0rc1-175-g32ae33c
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-160-gb9a7818';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-175-g32ae33c';
 // file: lib\scripts\require.js
 
 var require,
@@ -961,37 +961,50 @@ module.exports = {
 
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
-            // LunaSysMgr calls this when the windows is maximized or opened.
-            window.Mojo.stageActivated = function() {
-                cordova.fireDocumentEvent("resume");
-            };
-            // LunaSysMgr calls this when the windows is minimized or closed.
-            window.Mojo.stageDeactivated = function() {
-                cordova.fireDocumentEvent("pause");
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is hidden
-            window.Mojo.hide = function() {
-                console.log("hide");
-            };
-            // LunaSysMgr calls this when a KeepAlive app's window is shown
-            window.Mojo.show = function() {
-                console.log("show");
-            };
-
-            // LunaSysMgr calls this whenever an app is "launched;"
-            window.Mojo.relaunch = function() {
-                // need to return true to tell sysmgr the relaunch succeeded.
-                // otherwise, it'll try to focus the app, which will focus the first
-                // opened window of an app with multiple windows.
-
-                var lp=JSON.parse(PalmSystem.launchParams) || {};
-                if (lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
-                    cordova.fireDocumentEvent("menubutton");
-                    return true;
-                } else {
-                    cordova.fireDocumentEvent("relaunch");
+            // Check for support for page visibility api
+            if(typeof document.webkitHidden !== "undefined") {
+                document.addEventListener("webkitvisibilitychange", function(e) {
+                    if(document.webkitHidden) {
+                        cordova.fireDocumentEvent("resume");
+                    } else {
+                        cordova.fireDocumentEvent("pause");
+                    }
+                });
+            
+            } else {
+                // LunaSysMgr calls this when the windows is maximized or opened.
+                window.Mojo.stageActivated = function() {
+                    cordova.fireDocumentEvent("resume");
+                };
+                // LunaSysMgr calls this when the windows is minimized or closed.
+                window.Mojo.stageDeactivated = function() {
+                    cordova.fireDocumentEvent("pause");
+                };
+                
+                //emulate new webOS.launch event on old devices, which coincidentally
+                //don't support the new page visibility api
+                var lp = JSON.parse(PalmSystem.launchParams) || {};
+                cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
+                
+                // LunaSysMgr calls this whenever an app is "launched;"
+                window.Mojo.relaunch = function(e) {
+                    var lp = JSON.parse(PalmSystem.launchParams) || {};
+                    if(lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
+                        cordova.fireDocumentEvent("menubutton");
+                        return true;
+                    } else {
+                        cordova.fireDocumentEvent("webOSRelaunch", {type:"webOSRelaunch", detail:lp});
+                    }
+                };
+            }
+            
+            document.addEventListener("keydown", function(e) {
+                // back gesture/button varies by version and build
+                if(e.keyCode == 27 || e.keyCode == 461 || e.keyIdentifier == "U+1200001" ||
+                        e.keyIdentifier == "U+001B" || e.keyIdentifier == "Back") {
+                    cordova.fireDocumentEvent("backbutton", e);
                 }
-            };
+            });
         });
     }
 };
@@ -5090,6 +5103,16 @@ modulemapper.clobbers('cordova/plugin/GlobalizationError', 'GlobalizationError')
 
 });
 
+// file: lib\webos\plugin\inappbrowser\symbols.js
+define("cordova/plugin/inappbrowser/symbols", function(require, exports, module) {
+
+
+var modulemapper = require('cordova/modulemapper');
+
+modulemapper.clobbers('cordova/plugin/webos/inappbrowser', 'open');
+
+});
+
 // file: lib\common\plugin\logger.js
 define("cordova/plugin/logger", function(require, exports, module) {
 
@@ -6153,7 +6176,7 @@ module.exports = {
             }
             this.showToastRequest = service.request("palm://com.webos.notification", {
                 method: "createToast",
-                parameters: reqParams,
+                parameters: reqParam,
                 onSuccess: function(inResponse) {
                     callback && callback(inResponse.toastId);
                 },
@@ -6204,8 +6227,10 @@ module.exports = {
      * @return Object                       Window object of the child window for the dashboard
      */
     showDashboard: function(url, html) {
+        var modulemapper = require('cordova/modulemapper');
+        var origOpen = modulemapper.getOriginalSymbol(window, 'open');
         if(isLegacy) {
-            var dash = window.open(url, "_blank", "attributes={\"window\":\"dashboard\"}");
+            var dash = origOpen((url || "about:blank"), "_blank", "attributes={\"window\":\"dashboard\"}");
             if(html) {
                 dash.document.write(html);
             }
@@ -6523,7 +6548,9 @@ module.exports={
      * @return Object                       Window object of the child window for the new card
      */
     newCard: function(url, html) {
-        var child = window.open(url);
+        var modulemapper = require('cordova/modulemapper');
+        var origOpen = modulemapper.getOriginalSymbol(window, 'open');
+        var child = origOpen((url || "about:blank"));
         if(html) {
             child.document.write(html);
         }
@@ -6818,6 +6845,139 @@ module.exports = {
 
 });
 
+// file: lib\webos\plugin\webos\inappbrowser.js
+define("cordova/plugin/webos/inappbrowser", function(require, exports, module) {
+
+var channel = require('cordova/channel');
+var modulemapper = require('cordova/modulemapper');
+var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
+var fireWindowEvent = function(win, data) {
+    var event = document.createEvent('Events');
+    event.initEvent(data.type, false, false);
+    for(var x in data) {
+        event[x] = data[x];
+    }
+    win.dispatchEvent(event);
+};
+
+module.exports = function(strUrl, strWindowName, strWindowFeatures) {
+    if(!strUrl || strUrl.length==0) {
+        strUrl = "about:blank";
+    }
+    var child = origOpenFunc.apply(window, arguments);
+    
+    if(child) {
+        if(child.PalmSystem) {
+            child.PalmSystem.stageReady();
+        }
+        //window has been created, so fire "loadstart" immediately
+        fireWindowEvent(child, {type:"loadstart", url:child.location.href});
+        
+        var loaded = false;
+    
+        //fire "loadstop" when loading finishes
+        child.addEventListener("load", function(e) {
+            if(!loaded) {
+                fireWindowEvent(child, {type:"loadstop", url:child.location.href});
+                loaded = true;
+            }
+        });
+        if(strUrl === "about:blank") {
+            setTimeout(function() {
+                fireWindowEvent(child, {type:"loadstop", url:""});
+                loaded = true;
+            }, 0);
+        }
+    
+        //fire "loaderror" when an error occurs or the user aborts loading
+        child.addEventListener("error", function(e) {
+            fireWindowEvent(child, {type:"loaderror", url:child.location.href,
+                    code:(e.lineno || 1), message:(e.message || "Error loading page")});
+            loaded = true;
+        });
+        child.addEventListener("abort", function(e) {
+            fireWindowEvent(child, {type:"loaderror", url:child.location.href,
+                    code:2, message:"Page load aborted"});
+            loaded = true;
+        });
+    
+        child.addEventListener("unload", function(e) {
+            if(loaded) {
+                fireWindowEvent(child, {type:"exit", url:child.location.href});
+            }
+        });
+    
+        child.executeScript = function(injectDetails, callback) {
+            if(injectDetails.code) {
+                var result = child.eval(injectDetails.code);
+                callback(result);
+            } else if (injectDetails.file) {
+                if(child.document.readyState === "interactive" || child.document.readyState === "complete" ||
+                        child.document.readyState === "loaded") {
+                    var script = child.document.createElement('script');
+                    script.src = injectDetails.file;
+                    script.onload = callback;
+                    script.onerror = callback;
+                    script.charset = "utf-8";
+                    child.document.getElementsByTagName('head')[0].appendChild(script);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<scri' + 'pt src="' + injectDetails.file + '"' +
+                            (onLoad ? ' onload="' + callback + '"' : '') +
+                            (onError ? ' onerror="' + callback + '"' : '') +
+                            '></scri' + 'pt>');
+                    /* jshint evil: false */
+                }
+            } else {
+                throw new Error('executeScript requires exactly one of code or file to be specified');
+            }
+        };
+    
+        child.insertCSS = function(injectDetails, callback) {
+            var ready = (child.document.readyState === "interactive" || child.document.readyState === "complete" ||
+                        child.document.readyState === "loaded");
+            if(injectDetails.code) {
+                if(ready) {
+                    var style = child.document.createElement('style');
+                    style.media = "screen";
+                    style.type = "text/css";
+                    style.appendChild(document.createTextNode(injectDetails.code));
+                    child.document.getElementsByTagName('head')[0].appendChild(style);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<style media="screen" type="text/css" >' +
+                            injectDetails.code + '</style>');
+                    /* jshint evil: false */
+                }
+            } else if(injectDetails.file) {
+                if(ready) {
+                    var link = child.document.createElement('link');
+                    link.href = inPath;
+                    link.media = "screen";
+                    link.rel = "stylesheet";
+                    link.type = "text/css";
+                    child.document.getElementsByTagName('head')[0].appendChild(link);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<link href="' + inPath + '" media="screen" rel="' +
+                            'stylesheet" type="text/css" />');
+                    /* jshint evil: false */
+                }
+            } else {
+                throw new Error('insertCSS requires exactly one of code or file to be specified');
+            }
+        }
+    }
+    
+    return child;
+};
+
+
+});
+
 // file: lib\webos\plugin\webos\network.js
 define("cordova/plugin/webos/network", function(require, exports, module) {
 
@@ -6877,10 +7037,8 @@ define("cordova/plugin/webos/notification", function(require, exports, module) {
 
 var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var legacyAlert = function(callback, args) {
-    var root = window.opener || window.rootWindow || window.top || window;
-    if(!root.setTimeout) {
-        root = window;
-    }
+    var modulemapper = require('cordova/modulemapper');
+    var origOpen = modulemapper.getOriginalSymbol(window, 'open');
     var callbackName = "popupAlert" + new Date().getTime();
     root[callbackName] = function() {
         if(callback) {
@@ -6889,7 +7047,7 @@ var legacyAlert = function(callback, args) {
         delete root[callbackName];
     };
     var html='<html><head><style>body {color:white;' + ((isLegacy && window.device.version.indexOf("3.")<0) ? "background-color: #000000;" : "") + '-webkit-user-select: none;} .notification-button {position:absolute;bottom:6px;left:15%;right:15%;font-size: 16px;text-align: center;white-space: nowrap;padding: 6px 18px;overflow: hidden;border-radius: 3px;border: 1px solid #707070;border: 1px solid rgba(15, 15, 15, 0.5);box-shadow: inset 0px 1px 0px rgba(255, 255, 255, 0.2);color: white;background-color: rgba(160,160,160,0.35););background-size: contain;text-overflow: ellipsis;} .notification-button:active:hover {background-position: top;border-top: 1px solid rgba(15, 15, 15, 0.6);box-shadow: inset 0px 1px 0px rgba(0, 0, 0, 0.1);bottom:5px;background:rgba(160,160,160,0.2);}</style><script>setTimeout(function(){document.addEventListener("keydown", function(e){if(e.keyCode==27) {e.preventDefault(); window.onbeforeunload(); return true;}}, true);document.getElementById("b1").addEventListener("click",function(f){window.close();},false); window.onbeforeunload=function(){window.opener.' + callbackName + '();};},200);</script></head><body><h2>' + args[1] + '</h2>' + args[0] + '<br/><br/><div id="b1" class="notification-button">' + args[2] + '</div></body></html>';
-    var child = root.open("", "PopupAlert", "height=150, attributes={\"window\":\"popupalert\"}");
+    var child = origOpen("about:blank", "PopupAlert", "height=150, attributes={\"window\":\"popupalert\"}");
     child.document.write(html);
     if(child.PalmSystem) {
         child.PalmSystem.stageReady();
