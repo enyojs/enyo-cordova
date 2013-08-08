@@ -15,8 +15,8 @@ enyo.kind({
 	],
 	getCurrentAcceleration: function(inSender, inEvent) {
 		if(navigator.accelerometer && navigator.accelerometer.getCurrentAcceleration) {
-			navigator.accelerometer.getCurrentAcceleration(enyo.bind(this, "accelSuccess"),
-					enyo.bind(this, "accelFailure"));
+			navigator.accelerometer.getCurrentAcceleration(this.bindSafely("accelSuccess"),
+					this.bindSafely("accelFailure"));
 		} else {
 			this.$.result.setContent("Accelerometer API not supported on this platform.");
 		}
@@ -30,8 +30,8 @@ enyo.kind({
 				this.watchID = undefined;
 				this.$.watchToggle.setContent("watchAcceleration");
 			} else {
-				this.watchID = navigator.accelerometer.watchAcceleration(enyo.bind(this, "accelSuccess"),
-						enyo.bind(this, "accelFailure"), {frequency: 3000});
+				this.watchID = navigator.accelerometer.watchAcceleration(this.bindSafely("accelSuccess"),
+						this.bindSafely("accelFailure"), {frequency: 3000});
 				if(this.watchID) {
 					this.$.watchToggle.setContent("clearWatch");
 				}

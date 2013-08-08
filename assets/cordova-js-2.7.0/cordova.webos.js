@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-178-g99abc45
+// 2.7.0rc1-180-gc60bf16
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-178-g99abc45';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-180-gc60bf16';
 // file: lib\scripts\require.js
 
 var require,
@@ -6230,7 +6230,7 @@ module.exports = {
         var modulemapper = require('cordova/modulemapper');
         var origOpen = modulemapper.getOriginalSymbol(window, 'open');
         if(isLegacy) {
-            var dash = origOpen((url || "about:blank"), "_blank", "attributes={\"window\":\"dashboard\"}");
+            var dash = origOpen(url, "_blank", "attributes={\"window\":\"dashboard\"}");
             if(html) {
                 dash.document.write(html);
             }
@@ -6550,7 +6550,7 @@ module.exports={
     newCard: function(url, html) {
         var modulemapper = require('cordova/modulemapper');
         var origOpen = modulemapper.getOriginalSymbol(window, 'open');
-        var child = origOpen((url || "about:blank"));
+        var child = origOpen(url);
         if(html) {
             child.document.write(html);
         }
@@ -6861,9 +6861,6 @@ var fireWindowEvent = function(win, data) {
 };
 
 module.exports = function(strUrl, strWindowName, strWindowFeatures) {
-    if(!strUrl || strUrl.length==0) {
-        strUrl = "about:blank";
-    }
     var child = origOpenFunc.apply(window, arguments);
     
     if(child) {
@@ -6882,7 +6879,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
                 loaded = true;
             }
         });
-        if(strUrl === "about:blank") {
+        if(!strUrl || strUrl.length==0 || strUrl==="about:blank") {
             setTimeout(function() {
                 fireWindowEvent(child, {type:"loadstop", url:""});
                 loaded = true;
@@ -7047,7 +7044,7 @@ var legacyAlert = function(callback, args) {
         delete window[callbackName];
     };
     var html='<html><head><style>body {color:white;' + ((isLegacy && window.device.version.indexOf("3.")<0) ? "background-color: #000000;" : "") + '-webkit-user-select: none;} .notification-button {position:absolute;bottom:6px;left:15%;right:15%;font-size: 16px;text-align: center;white-space: nowrap;padding: 6px 18px;overflow: hidden;border-radius: 3px;border: 1px solid #707070;border: 1px solid rgba(15, 15, 15, 0.5);box-shadow: inset 0px 1px 0px rgba(255, 255, 255, 0.2);color: white;background-color: rgba(160,160,160,0.35););background-size: contain;text-overflow: ellipsis;} .notification-button:active:hover {background-position: top;border-top: 1px solid rgba(15, 15, 15, 0.6);box-shadow: inset 0px 1px 0px rgba(0, 0, 0, 0.1);bottom:5px;background:rgba(160,160,160,0.2);}</style><script>setTimeout(function(){document.addEventListener("keydown", function(e){if(e.keyCode==27) {e.preventDefault(); window.onbeforeunload(); return true;}}, true);document.getElementById("b1").addEventListener("click",function(f){window.close();},false); window.onbeforeunload=function(){window.opener.' + callbackName + '();};},200);</script></head><body><h2>' + args[1] + '</h2>' + args[0] + '<br/><br/><div id="b1" class="notification-button">' + args[2] + '</div></body></html>';
-    var child = origOpen("about:blank", "PopupAlert", "height=150, attributes={\"window\":\"popupalert\"}");
+    var child = origOpen(undefined, "PopupAlert", "height=150, attributes={\"window\":\"popupalert\"}");
     child.document.write(html);
     if(child.PalmSystem) {
         child.PalmSystem.stageReady();

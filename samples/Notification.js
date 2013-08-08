@@ -52,7 +52,7 @@ enyo.kind({
 			this.$.result.setContent("Confirm not supported on this version of webOS");
 		} else if(navigator.notification && navigator.notification.alert) {
 			navigator.notification.alert("This is a confirmation notification, which has multiple button options.",
-					enyo.bind(this, "confirmCallback"));
+					this.bindSafely("confirmCallback"));
 		}
 		return true;
 	},
