@@ -15,8 +15,8 @@ enyo.kind({
 	],
 	getCurrentPosition: function(inSender, inEvent) {
 		if(navigator.geolocation && navigator.geolocation.getCurrentPosition) {
-			navigator.geolocation.getCurrentPosition(enyo.bind(this, "geoSuccess"),
-					enyo.bind(this, "geoFailure"),
+			navigator.geolocation.getCurrentPosition(this.bindSafely("geoSuccess"),
+					this.bindSafely("geoFailure"),
 					{maximumAge:3000, timeout:15000, enableHighAccuracy:true});
 		} else {
 			this.$.result.setContent("Geolocation API not supported on this platform.");
@@ -31,8 +31,8 @@ enyo.kind({
 				this.watchID = undefined;
 				this.$.watchToggle.setContent("watchPosition");
 			} else {
-				this.watchID = navigator.geolocation.watchPosition(enyo.bind(this, "geoSuccess"),
-						enyo.bind(this, "geoFailure"),
+				this.watchID = navigator.geolocation.watchPosition(this.bindSafely("geoSuccess"),
+						this.bindSafely("geoFailure"),
 						{maximumAge:3000, timeout:5000, enableHighAccuracy:true});
 				if(this.watchID) {
 					this.$.watchToggle.setContent("clearWatch");

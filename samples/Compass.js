@@ -14,8 +14,8 @@ enyo.kind({
 	],
 	getCurrentHeading: function(inSender, inEvent) {
 		if(navigator.compass && navigator.compass.getCurrentHeading) {
-			navigator.compass.getCurrentHeading(enyo.bind(this, "compassSuccess"),
-					enyo.bind(this, "compassFailure"));
+			navigator.compass.getCurrentHeading(this.bindSafely("compassSuccess"),
+					this.bindSafely("compassFailure"));
 		} else {
 			this.$.result.setContent("Compass API not supported on this platform.");
 		}
@@ -24,13 +24,13 @@ enyo.kind({
 	toggleWatch: function(inSender, inEvent) {
 		if(navigator.compass && navigator.compass.watchHeading) {
 			if(this.watchID) {
-				navigator.compass.clearWatch((this.watchID);
+				navigator.compass.clearWatch(this.watchID);
 				this.$.result.setContent("Stopped compass heading watching.");
 				this.watchID = undefined;
 				this.$.watchToggle.setContent("watchHeading");
 			} else {
-				this.watchID = navigator.compass.watchHeading(enyo.bind(this, "compassSuccess"),
-						enyo.bind(this, "compassFailure"), {frequency: 500});
+				this.watchID = navigator.compass.watchHeading(this.bindSafely("compassSuccess"),
+						this.bindSafely("compassFailure"), {frequency: 500});
 				if(this.watchID) {
 					this.$.watchToggle.setContent("clearWatch");
 				}
@@ -51,7 +51,7 @@ enyo.kind({
 	},
 	destroy: function() {
 		if(this.watchID) {
-			navigator.compass.clearWatch((this.watchID);
+			navigator.compass.clearWatch(this.watchID);
 		}
 		this.inherited(arguments);
 	}

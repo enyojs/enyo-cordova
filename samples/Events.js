@@ -16,7 +16,7 @@ enyo.kind({
 		]},
 	],
 	deviceready: function(inSender, inEvent) {
-		if(window.PalmSystem) {
+		if(enyo.platform.webos && enyo.platform.webos>3) {
 			this.$.supported.addContent(", localechange");
 		}
 		this.$.result.setContent("<i>deviceready</i> event occurred<br>");
