@@ -15,12 +15,13 @@ enyo.kind({
 	],
 	getCurrentPosition: function(inSender, inEvent) {
 		if(navigator.geolocation && navigator.geolocation.getCurrentPosition) {
-			navigator.geolocation.getCurrentPosition(enyo.bind(this, "geoSuccess"),
-					enyo.bind(this, "geoFailure"),
+			navigator.geolocation.getCurrentPosition(this.bindSafely("geoSuccess"),
+					this.bindSafely("geoFailure"),
 					{maximumAge:3000, timeout:15000, enableHighAccuracy:true});
 		} else {
 			this.$.result.setContent("Geolocation API not supported on this platform.");
 		}
+		return true;
 	},
 	toggleWatch: function(inSender, inEvent) {
 		if(navigator.geolocation && navigator.geolocation.watchPosition) {
@@ -30,8 +31,8 @@ enyo.kind({
 				this.watchID = undefined;
 				this.$.watchToggle.setContent("watchPosition");
 			} else {
-				this.watchID = navigator.geolocation.watchPosition(enyo.bind(this, "geoSuccess"),
-						enyo.bind(this, "geoFailure"),
+				this.watchID = navigator.geolocation.watchPosition(this.bindSafely("geoSuccess"),
+						this.bindSafely("geoFailure"),
 						{maximumAge:3000, timeout:5000, enableHighAccuracy:true});
 				if(this.watchID) {
 					this.$.watchToggle.setContent("clearWatch");
@@ -40,6 +41,7 @@ enyo.kind({
 		} else {
 			this.$.result.setContent("Geolocation API not supported on this platform.");
 		}
+		return true;
 	},
 	geoSuccess: function(inResponse) {
 		this.$.result.setContent("Latitude: " + inResponse.coords.latitude + "<br/>" +
@@ -53,5 +55,11 @@ enyo.kind({
 	},
 	geoFailure: function(inError) {
 		this.$.result.setContent("Unable to retrieve geolocation data.<br/>" + inError.code + ": " + inError.message);
+	},
+	destroy: function() {
+		if(this.watchID) {
+			navigator.geolocation.clearWatch(this.watchID);
+		}
+		this.inherited(arguments);
 	}
 });
