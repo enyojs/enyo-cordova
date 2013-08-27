@@ -5,7 +5,7 @@ enyo.kind({
 		{classes: "cordova-sample-divider", content: "Geolocation API"},
 		{classes: "cordova-sample-tools", components: [
 			{kind:"onyx.Button", content: "getCurrentPosition", ontap:"getCurrentPosition"},
-			{name:"watchToggle", kind:"onyx.Button", content: "watchPosition", ontap:"toggleWatch"},
+			{name:"watchToggle", kind:"onyx.Button", content: "watchPosition", ontap:"toggleWatch"}
 		]},
 		{tag:"br"},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [

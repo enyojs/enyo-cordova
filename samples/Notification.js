@@ -13,7 +13,7 @@ enyo.kind({
 		{classes: "cordova-sample-tools", components: [
 			{kind:"onyx.Button", content: "Alert", ontap:"alertButton"},
 			{kind:"onyx.Button", content: "Confirm", ontap:"confirmButton"},
-			{kind:"onyx.Button", content: "Prompt", ontap:"promptButton"},
+			{kind:"onyx.Button", content: "Prompt", ontap:"promptButton"}
 		]},
 		{tag:"br"},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [

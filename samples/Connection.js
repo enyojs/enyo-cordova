@@ -1,3 +1,4 @@
+/* global Connection: true */
 enyo.kind({
 	name: "cordova.sample.Connection",
 	classes: "onyx cordova-sample",
@@ -19,7 +20,7 @@ enyo.kind({
 				{tag:"li", content:"Connection.CELL_3G - Cell 3G connection"},
 				{tag:"li", content:"Connection.CELL_4G - Cell 4G connection"},
 				{tag:"li", content:"Connection.CELL - Cell generic connection"},
-				{tag:"li", content:"Connection.NONE - No network connection"}				
+				{tag:"li", content:"Connection.NONE - No network connection"}
 			]}
 		]}
 	],
