@@ -5,7 +5,7 @@ enyo.kind({
 		{classes: "cordova-sample-divider", content: "Compass API"},
 		{classes: "cordova-sample-tools", components: [
 			{kind:"onyx.Button", content: "getCurrentHeading", ontap:"getCurrentHeading"},
-			{name:"watchToggle", kind:"onyx.Button", content: "watchHeading", ontap:"toggleWatch"},
+			{name:"watchToggle", kind:"onyx.Button", content: "watchHeading", ontap:"toggleWatch"}
 		]},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [
 			{kind: "onyx.GroupboxHeader", content: "Result"},
