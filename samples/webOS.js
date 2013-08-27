@@ -1,3 +1,4 @@
+/* global device: true */
 enyo.kind({
 	name: "cordova.sample.webOS",
 	classes: "onyx enyo-fit",
@@ -48,7 +49,7 @@ enyo.kind({
 						{content: "free"}
 					]}
 				]},
-				{name:"orientation", classes:"cordova-sample-result", allowHtml:true, content:"&nbsp;"},
+				{name:"orientation", classes:"cordova-sample-result", allowHtml:true, content:"&nbsp;"}
 			]},
 			{tag:"br"},
 			{name:"vkSection", components:[
@@ -76,14 +77,14 @@ enyo.kind({
 			]},
 			{tag:"br"},
 			{classes: "cordova-sample-tools", components: [
-				{kind:"onyx.Button", content: "Deactivate", ontap:"deactivate"},
-				
+				{kind:"onyx.Button", content: "Deactivate", ontap:"deactivate"}
+
 			]},
 			{tag:"br"},
 			{classes: "cordova-sample-tools", components: [
 				{kind:"onyx.Button", content: "New Card", ontap:"newCard"},
 				{name:"autoOffBtn", kind:"onyx.Button", content: "Block Screen Timeout", ontap:"noAutoOff"},
-				{name:"lightbarBtn", kind:"onyx.Button", content: "Subtle Lightbar", ontap:"dimLightbar"},
+				{name:"lightbarBtn", kind:"onyx.Button", content: "Subtle Lightbar", ontap:"dimLightbar"}
 			]}
 		]}
 	],
@@ -93,17 +94,17 @@ enyo.kind({
 			this.$.appID.setContent(webOS.fetchAppId());
 			this.$.appInfo.setContent(enyo.json.stringify(webOS.fetchAppInfo(), null, "\t"));
 			this.$.appPath.setContent(webOS.fetchAppRootPath());
-			
+
 			//Extended Notification API
 			//Dashboard only available on old webOS 1-3
 			this.toastIDs = [];
 			if(navigator.notification.supportsDashboard()) {
 				this.$.dash.show();
 			}
-			
+
 			//Orientation API
 			this.$.orientation.setContent(webOS.orientation.getOrientation());
-			
+
 			//Virtual Keyboard API
 			if(webOS.keyboard) {
 				this.$.vkTypes.setContent("<ul><li>webOS.keyboard.types.text</li>" +
@@ -118,7 +119,7 @@ enyo.kind({
 			} else {
 				this.$.vkSection.hide();
 			}
-			
+
 			//Window API
 			this.$.launchP.setContent(enyo.json.stringify(webOS.window.launchParams(), null, "\t"));
 		} else {
@@ -140,7 +141,7 @@ enyo.kind({
 		return true;
 	},
 	toastShown: function(id) {
-		if(id!=undefined) {
+		if(id != null) {
 			this.toastIDs.push(id);
 		}
 	},
@@ -154,7 +155,9 @@ enyo.kind({
 	showDashboard: function(inSender, inEvent) {
 		//first argument can alternately be an html filepath
 		//second argument is any html to be written to the dashboard
-		var html = "<html><head></head><body style=\"" + ((device.version.indexOf("3.")!=0) ? "background-color: black;" : "") +"\"><h3 style=\"color:white;\">This is a sample dashboard window</body></html>";
+		var html = "<html><head></head><body style=\"" +
+		((device.version.indexOf("3.") !== 0) ? "background-color: black;" : "") +
+		"\"><h3 style=\"color:white;\">This is a sample dashboard window</body></html>";
 		navigator.notification.showDashboard(undefined, html);
 		return true;
 	},

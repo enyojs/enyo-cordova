@@ -5,7 +5,7 @@ enyo.kind({
 		{classes: "cordova-sample-divider", content: "Accelerometer API"},
 		{classes: "cordova-sample-tools", components: [
 			{kind:"onyx.Button", content: "getCurrentAcceleration", ontap:"getCurrentAcceleration"},
-			{name:"watchToggle", kind:"onyx.Button", content: "watchAcceleration", ontap:"toggleWatch"},
+			{name:"watchToggle", kind:"onyx.Button", content: "watchAcceleration", ontap:"toggleWatch"}
 		]},
 		{tag:"br"},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [

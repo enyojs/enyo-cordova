@@ -18,7 +18,6 @@ Loads the cordova.js file for the current platform.
 			//{platform: "ie", version: 10, cordovaFilename: "windows8"},
 			//{platform: "safari", cordovaFilename: "osx"},
 			{platform: "tizen"}
-			
 		];
 		var platform;
 		if (window.PalmSystem) {

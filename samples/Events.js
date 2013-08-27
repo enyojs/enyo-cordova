@@ -13,7 +13,7 @@ enyo.kind({
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [
 			{kind: "onyx.GroupboxHeader", content: "Event Monitor"},
 			{name:"result", classes:"cordova-sample-result", allowHtml:true, content:"Events API not supported on this platform."}
-		]},
+		]}
 	],
 	deviceready: function(inSender, inEvent) {
 		if(enyo.platform.webos && enyo.platform.webos>3) {
