@@ -1,6 +1,6 @@
 /* global Connection: true */
 enyo.kind({
-	name: "cordova.sample.Connection",
+	name: "enyo.cordova.sample.Connection",
 	classes: "onyx cordova-sample",
 	components: [
 		{kind:"enyo.Signals", ondeviceready:"deviceready"},

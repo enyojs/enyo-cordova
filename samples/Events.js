@@ -1,5 +1,5 @@
 enyo.kind({
-	name: "cordova.sample.Events",
+	name: "enyo.cordova.sample.Events",
 	classes: "onyx cordova-sample",
 	kind:"enyo.Scroller",
 	components: [
@@ -7,7 +7,10 @@ enyo.kind({
 		{classes: "cordova-sample-divider", content: "Events API"},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [
 			{kind: "onyx.GroupboxHeader", content: "Events Supported by enyo.Signals"},
-			{name:"supported", classes:"cordova-sample-result", content:"deviceready, pause, resume, online, offline, backbutton, batterycritical, batterylow, batterystatus, menubutton, searchbutton, startcallbutton, endcallbutton, volumedownbutton, volumeupbutton"}
+			{classes:"cordova-sample-result", components:[
+				{name:"supported",  content:"deviceready, pause, resume, online, offline, backbutton, batterycritical, batterylow, batterystatus, menubutton, searchbutton, startcallbutton, endcallbutton, volumedownbutton, volumeupbutton"},
+				{name:"disclaimer", content:"Note: battery, search, call, and volume events not supported current in webOS Cordova.", style:"font-size:0.65em;", showing:false}
+			]} 
 		]},
 		{tag:"br"},
 		{kind: "onyx.Groupbox", classes:"cordova-sample-result-box", components: [
@@ -16,8 +19,12 @@ enyo.kind({
 		]}
 	],
 	deviceready: function(inSender, inEvent) {
-		if(enyo.platform.webos && enyo.platform.webos>3) {
-			this.$.supported.addContent(", localechange");
+		if(enyo.platform.webos) {
+			this.$.disclaimer.show();
+			if(enyo.platform.webos>3) {
+				this.$.supported.addContent(", localechange");
+				this.$.disclaimer.setContent("Note: battery, menu, search, call, and volume events not supported current in webOS Cordova.");
+			}
 		}
 		this.$.result.setContent("<i>deviceready</i> event occurred<br>");
 	},
