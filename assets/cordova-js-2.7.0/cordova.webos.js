@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-180-gc60bf16
+// 2.7.0rc1-184-g10b0c87
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-180-gc60bf16';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-184-g10b0c87';
 // file: lib\scripts\require.js
 
 var require,
@@ -6052,28 +6052,28 @@ var service = require('cordova/plugin/webos/service');
 module.exports = {
     start: function() {
         if(!this.request) {
-            this.request = service.request('palm://com.palm.systemservice', {
-                method: 'getPreferences',
+            this.request = service.request('palm://com.webos.settingsservice', {
+                method: 'getSystemSettings',
                 parameters: {
                     keys: ["localeInfo"],
                 },
                 onSuccess: function (inResponse) {
-                    if(inResponse.localeInfo) {
+                    if(inResponse.settings.localeInfo) {
                         if(navigator.localeInfo) {
-                            if((navigator.localeInfo.locales.UI !== inResponse.localeInfo.locales.UI) ||
-                                    (navigator.localeInfo.timezone !== inResponse.localeInfo.timezone) ||
-                                    (navigator.localeInfo.clock !== inResponse.localeInfo.clock)) {
+                            if((navigator.localeInfo.locales.UI !== inResponse.settings.localeInfo.locales.UI) ||
+                                    (navigator.localeInfo.timezone !== inResponse.settings.localeInfo.timezone) ||
+                                    (navigator.localeInfo.clock !== inResponse.settings.localeInfo.clock)) {
                                 cordova.fireDocumentEvent("localechange");
                             }
                         }
-                        navigator.localeInfo = inResponse.localeInfo;
+                        navigator.localeInfo = inResponse.settings.localeInfo;
                     }
                 },
                 onFailure: function(inError) {
                     console.error("Locale monitor subscribe:error");
                 },
                 subscribe: true,
-                resubscribe: true
+                resubscribe: false
             })
         };
     },
@@ -7187,6 +7187,9 @@ LS2Request.prototype.send = function() {
         }
         if(self.onComplete) {
             self.onComplete(parsedMsg);
+        }
+        if(!self.subscribe) {
+            self.cancel();
         }
     };
     this.bridge.call(this.uri, JSON.stringify(this.params));
