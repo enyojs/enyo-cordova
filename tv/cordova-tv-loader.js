@@ -24,7 +24,7 @@ Loads the external Cordova TV modules for webOS TV platform.
 			add our TV libraries. This allows us to add the TV modules after Cordova but before DOMContentLoaded.
 		*/		
 		var inline = document.createElement("script");
-		var inject = "if(window.cordova || ctx.PhoneGap) {\n" +
+		var inject = "if(window.cordova || window.PhoneGap) {\n" +
 				"enyo.depends.apply(enyo, " + enyo.json.stringify(tvModules) + ");\n" +
 				"} else {\n" +
 				"enyo.warn(\"Cordova not found, ignoring tv modules\");\n" +
