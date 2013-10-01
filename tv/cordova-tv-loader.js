@@ -29,7 +29,7 @@ Loads the external Cordova TV modules for webOS TV platform.
 				"} else {\n" +
 				"enyo.warn(\"Cordova not found, ignoring tv modules\");\n" +
 				"}";
-		inline.appendChild(document.createTextNode(inject);
+		inline.appendChild(document.createTextNode(inject));
 		document.getElementsByTagName("head")[0].appendChild(inline);
 		
 	} else {
