@@ -1,6 +1,6 @@
 /* global device: true */
 enyo.kind({
-	name: "cordova.sample.webOS",
+	name: "enyo.cordova.sample.webOS",
 	classes: "onyx enyo-fit",
 	kind:"enyo.Scroller",
 	components: [
@@ -77,12 +77,11 @@ enyo.kind({
 			]},
 			{tag:"br"},
 			{classes: "cordova-sample-tools", components: [
-				{kind:"onyx.Button", content: "Deactivate", ontap:"deactivate"}
-
+				{kind:"onyx.Button", content: "Deactivate", ontap:"deactivate"},
+				{kind:"onyx.Button", content: "New Card", ontap:"newCard"}
 			]},
 			{tag:"br"},
 			{classes: "cordova-sample-tools", components: [
-				{kind:"onyx.Button", content: "New Card", ontap:"newCard"},
 				{name:"autoOffBtn", kind:"onyx.Button", content: "Block Screen Timeout", ontap:"noAutoOff"},
 				{name:"lightbarBtn", kind:"onyx.Button", content: "Subtle Lightbar", ontap:"dimLightbar"}
 			]}
