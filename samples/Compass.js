@@ -50,7 +50,7 @@ enyo.kind({
 		var details = "";
 		if(inError.code==20) {
 			details += "<br><br>Compass not supported";
-		} else if(inError.code==0) {
+		} else if(inError.code===0) {
 			details += "<br><br>Internal compass error";
 		}
 		this.$.result.setContent("Unable to retrieve compass data." + details); 
