@@ -1,5 +1,5 @@
 enyo.kind({
-	name: "cordova.sample.Accelerometer",
+	name: "enyo.cordova.sample.Accelerometer",
 	classes: "onyx cordova-sample",
 	components: [
 		{classes: "cordova-sample-divider", content: "Accelerometer API"},

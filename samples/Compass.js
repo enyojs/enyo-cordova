@@ -1,5 +1,5 @@
 enyo.kind({
-	name: "cordova.sample.Compass",
+	name: "enyo.cordova.sample.Compass",
 	classes: "onyx cordova-sample",
 	components: [
 		{classes: "cordova-sample-divider", content: "Compass API"},
@@ -47,7 +47,13 @@ enyo.kind({
 				"Timestamp: " + inResponse.timestamp);
 	},
 	compassFailure: function(inError) {
-		this.$.result.setContent("Unable to retrieve compass data.");
+		var details = "";
+		if(inError.code==20) {
+			details += "<br><br>Compass not supported";
+		} else if(inError.code===0) {
+			details += "<br><br>Internal compass error";
+		}
+		this.$.result.setContent("Unable to retrieve compass data." + details); 
 	},
 	destroy: function() {
 		if(this.watchID) {
