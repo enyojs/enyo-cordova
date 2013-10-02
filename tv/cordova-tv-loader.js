@@ -1,10 +1,11 @@
 /**
-Loads the external Cordova TV modules for webOS TV platform.
+	Loads the external Cordova TV modules for webOS TV platform.
 */
 //* @protected
 (function(){
 	if(window.PalmSystem && (!enyo.platform.webos || enyo.platform.webos>3)) {
-		var cordovaTVVersion = ctx.useCordovaTVVersion || "3.0";
+		// Can override tv module version by setting window.useCordovaTVVersion
+		var cordovaTVVersion = window.useCordovaTVVersion || "3.0";
 		var tvModules = [
 			"/usr/palm/frameworks/cordova-tv/" + cordovaTVVersion + "/advertisement.js",
 			"/usr/palm/frameworks/cordova-tv/" + cordovaTVVersion + "/billing.js",
