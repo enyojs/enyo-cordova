@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-190-g4d86a6c
+// 2.7.0rc1-191-g356f485
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-190-g4d86a6c';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-191-g356f485';
 // file: lib\scripts\require.js
 
 var require,
@@ -951,8 +951,8 @@ module.exports = {
         //webos module loads additional webOS-specific core features on top of Cordova core featureset
         if(!externalWebOSLib) {
             modulemapper.merges('cordova/plugin/webos/extras/webos', 'webOS');
-            //set the webOS stage as ready
-            if (window.PalmSystem) {
+            //set the webOS stage as ready for old webOS
+            if(window.PalmSystem && isLegacy) {
                 window.PalmSystem.stageReady();
             }
         }
