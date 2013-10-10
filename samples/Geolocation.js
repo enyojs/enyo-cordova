@@ -1,5 +1,5 @@
 enyo.kind({
-	name: "cordova.sample.Geolocation",
+	name: "enyo.cordova.sample.Geolocation",
 	classes: "onyx cordova-sample",
 	components: [
 		{classes: "cordova-sample-divider", content: "Geolocation API"},

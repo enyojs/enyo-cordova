@@ -1,5 +1,5 @@
 enyo.kind({
-	name: "cordova.sample.Notification",
+	name: "enyo.cordova.sample.Notification",
 	classes: "onyx cordova-sample",
 	components: [
 		{kind:"enyo.Signals", ondeviceready:"deviceready"},

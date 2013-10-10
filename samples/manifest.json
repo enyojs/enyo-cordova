@@ -1,7 +1,7 @@
 {
 	"sourcePath":"../../..",
 	"name": "Cordova",
-	"ns": "cordova.sample",
+	"ns": "enyo.cordova.sample",
 	"loadPackages": "$lib/enyo-cordova $lib/enyo-cordova/samples",
 	"samples": [
 		{"name": "Accelerometer", "path":"$lib/enyo-cordova/samples/Accelerometer", "css":"sample"},	

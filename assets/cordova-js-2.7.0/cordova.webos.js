@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-184-g10b0c87
+// 2.7.0rc1-191-g356f485
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-184-g10b0c87';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-191-g356f485';
 // file: lib\scripts\require.js
 
 var require,
@@ -935,8 +935,9 @@ define("cordova/platform", function(require, exports, module) {
 
 /*global Mojo:false */
 
-var service=require('cordova/plugin/webos/service'),
-    cordova = require('cordova');
+var cordova = require('cordova');
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var externalWebOSLib = (window.webOS!=undefined);
 
 module.exports = {
     id: "webos",
@@ -948,13 +949,15 @@ module.exports = {
         modulemapper.merges('cordova/plugin/webos/service', 'navigator.service');
 
         //webos module loads additional webOS-specific core features on top of Cordova core featureset
-        modulemapper.merges('cordova/plugin/webos/extras/webos', 'webOS');
+        if(!externalWebOSLib) {
+            modulemapper.merges('cordova/plugin/webos/extras/webos', 'webOS');
+            //set the webOS stage as ready for old webOS
+            if(window.PalmSystem && isLegacy) {
+                window.PalmSystem.stageReady();
+            }
+        }
 
         modulemapper.mapModules(window);
-
-        if (window.PalmSystem) {
-            window.PalmSystem.stageReady();
-        }
 
         // create global Mojo object if it does not exist
         Mojo = window.Mojo || {};
@@ -962,6 +965,7 @@ module.exports = {
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
             // Check for support for page visibility api
+            // Temporarily ignored until page visibility api is fixed and working
             if(typeof document.webkitHidden !== "undefined" && false) {
                 document.addEventListener("webkitvisibilitychange", function(e) {
                     if(document.webkitHidden) {
@@ -970,7 +974,7 @@ module.exports = {
                         cordova.fireDocumentEvent("pause");
                     }
                 });
-            
+
             } else {
                 // LunaSysMgr calls this when the windows is maximized or opened.
                 window.Mojo.stageActivated = function() {
@@ -980,12 +984,13 @@ module.exports = {
                 window.Mojo.stageDeactivated = function() {
                     cordova.fireDocumentEvent("pause");
                 };
-                
-                //emulate new webOS.launch event on old devices, which coincidentally
-                //don't support the new page visibility api
+            }
+
+            if(isLegacy && !externalWebOSLib) {
+                //emulate new webOS launch/relaunch events on old devices
                 var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
                 cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
-                
+
                 // LunaSysMgr calls this whenever an app is "launched;"
                 window.Mojo.relaunch = function(e) {
                     var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
@@ -997,7 +1002,7 @@ module.exports = {
                     }
                 };
             }
-            
+
             document.addEventListener("keydown", function(e) {
                 // back gesture/button varies by version and build
                 if(e.keyCode == 27 || e.keyCode == 461 || e.keyIdentifier == "U+1200001" ||
@@ -6862,16 +6867,16 @@ var fireWindowEvent = function(win, data) {
 
 module.exports = function(strUrl, strWindowName, strWindowFeatures) {
     var child = origOpenFunc.apply(window, arguments);
-    
+
     if(child) {
         if(child.PalmSystem) {
             child.PalmSystem.stageReady();
         }
         //window has been created, so fire "loadstart" immediately
         fireWindowEvent(child, {type:"loadstart", url:child.location.href});
-        
+
         var loaded = false;
-    
+
         //fire "loadstop" when loading finishes
         child.addEventListener("load", function(e) {
             if(!loaded) {
@@ -6885,7 +6890,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
                 loaded = true;
             }, 0);
         }
-    
+
         //fire "loaderror" when an error occurs or the user aborts loading
         child.addEventListener("error", function(e) {
             fireWindowEvent(child, {type:"loaderror", url:child.location.href,
@@ -6897,13 +6902,13 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
                     code:2, message:"Page load aborted"});
             loaded = true;
         });
-    
+
         child.addEventListener("unload", function(e) {
             if(loaded) {
                 fireWindowEvent(child, {type:"exit", url:child.location.href});
             }
         });
-    
+
         child.executeScript = function(injectDetails, callback) {
             if(injectDetails.code) {
                 var result = child.eval(injectDetails.code);
@@ -6930,7 +6935,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
                 throw new Error('executeScript requires exactly one of code or file to be specified');
             }
         };
-    
+
         child.insertCSS = function(injectDetails, callback) {
             var ready = (child.document.readyState === "interactive" || child.document.readyState === "complete" ||
                         child.document.readyState === "loaded");
@@ -6968,7 +6973,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
             }
         }
     }
-    
+
     return child;
 };
 
@@ -7483,8 +7488,18 @@ window.cordova = require('cordova');
 
 // file: lib\scripts\bootstrap-webos.js
 
-require('cordova/channel').onNativeReady.fire();
-
+// if WEBOS_CORDOVA_DELAY_NATIVE_READY is set in the environment
+// before Cordova loads, we will set a response method,
+// WEBOS_CORDOVA_FIRE_NATIVE_READY, to be called at a future time.
+// This is to support preloaded app container windows that exist
+// to optimize app load time.
+if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
+    require('cordova/channel').onNativeReady.fire();
+} else {
+    window.WEBOS_CORDOVA_FIRE_NATIVE_READY = function() {
+        require('cordova/channel').onNativeReady.fire();
+    };
+}
 // file: lib\scripts\plugin_loader.js
 
 // Tries to load all plugins' js-modules.
