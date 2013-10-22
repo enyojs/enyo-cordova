@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-191-g356f485
+// 2.7.0rc1-200-g42ccefd
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-191-g356f485';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-200-g42ccefd';
 // file: lib\scripts\require.js
 
 var require,
@@ -813,7 +813,8 @@ var coreModules = {
     "Camera": require('cordova/plugin/webos/camera'),
     "Accelerometer" : require('cordova/plugin/webos/accelerometer'),
     "Notification" : require('cordova/plugin/webos/notification'),
-    "Geolocation": require('cordova/plugin/webos/geolocation')
+    "Geolocation": require('cordova/plugin/webos/geolocation'),
+    "Globalization": require('cordova/plugin/webos/globalization')
 };
 
 module.exports = function(success, fail, service, action, args) {
@@ -5831,7 +5832,7 @@ module.exports = {
     takePicture: function(successCallback, errorCallback, options) {
         var filename = (options || {}).filename | "";
 
-        service.request('palm://com.palm.applicationManager', {
+        service.request('luna://com.palm.applicationManager', {
             method: 'launch',
             parameters: {
             id: 'com.palm.app.camera',
@@ -5888,7 +5889,7 @@ module.exports = {
         } catch(e) {
             failureCallback(e)
         }
-        service.request('palm://com.palm.preferences/systemProperties', {
+        service.request('luna://com.palm.preferences/systemProperties', {
             method:"Get",
             parameters:{"key": "com.palm.properties.nduid"},
             onSuccess: function(result) {
@@ -6057,7 +6058,7 @@ var service = require('cordova/plugin/webos/service');
 module.exports = {
     start: function() {
         if(!this.request) {
-            this.request = service.request('palm://com.webos.settingsservice', {
+            this.request = service.request('luna://com.webos.settingsservice', {
                 method: 'getSystemSettings',
                 parameters: {
                     keys: ["localeInfo"],
@@ -6179,7 +6180,7 @@ module.exports = {
                     reqParam.onclick = {appId:appId, params:toastParams};
                 }
             }
-            this.showToastRequest = service.request("palm://com.webos.notification", {
+            this.showToastRequest = service.request("luna://com.webos.notification", {
                 method: "createToast",
                 parameters: reqParam,
                 onSuccess: function(inResponse) {
@@ -6208,7 +6209,7 @@ module.exports = {
                 PalmSystem.clearBannerMessage();
             }
         } else {
-            this.removeToastRequest = service.request("palm://com.webos.notification", {
+            this.removeToastRequest = service.request("luna://com.webos.notification", {
                 method: "cancelToast",
                 parameters: {toastId:id}
             });
@@ -6321,7 +6322,11 @@ var log = function(level, messageId, keyVals, freeText) {
             keyVals = JSON.stringify(keyVals);
         }
         if(window.PalmSystem.PmLogString) {
-            window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
+            if(level==levelDebug) { //debug only accepts 2 arguments
+                window.PalmSystem.PmLogString(level, freeText);
+            } else {
+                window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
+            }
         } else {
             console.error("Unable to send log; PmLogString not found in this version of PalmSystem");
         }
@@ -6747,6 +6752,7 @@ FileReader.prototype.readAsText = function(file, encoding) {
                     me.onloadend(new ProgressEvent("loadend", {target:me}));
                 }
             }
+            xhr = null;
         }
     };
     xhr.open("GET", file, true);
@@ -6779,7 +6785,7 @@ module.exports = {
     requests: [],
     watched: {},
     getLocation: function(successCallback, failureCallback, options) {
-        var request = this.requests[requests.length] = service.request('palm://com.palm.location', {
+        var request = this.requests[requests.length] = service.request('luna://com.palm.location', {
             method: "getCurrentPosition",
             parameters: {
                 accuracy: ((options[0]==true) ? 1 : 2),
@@ -6812,7 +6818,7 @@ module.exports = {
         });
     },
     addWatch: function(successCallback, failureCallback, options) {
-        this.watched[options[0]] = service.request('palm://com.palm.location', {
+        this.watched[options[0]] = service.request('luna://com.palm.location', {
             method: "startTracking",
             parameters: {
                 accuracy: ((options[1]==true) ? 1 : 2),
@@ -6845,6 +6851,61 @@ module.exports = {
             this.watched[options[0]].cancel();
             delete this.watched[options[0]];
         }
+    }
+};
+
+});
+
+// file: lib\webos\plugin\webos\globalization.js
+define("cordova/plugin/webos/globalization", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+
+module.exports = {
+    getPreferredLanguage: function(successCallback, errorCallback) {
+        // get a languageCode (e.g. en)
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var languageCode = inResponse.locale.languageCode;
+                // get a languageName (e.g. English) from the languageCode
+                service.request('luna://com.palm.systemservice', {
+                    method: 'getPreferenceValues',
+                    parameters: {
+                        'key': 'locale'
+                    },
+                    onSuccess: function(inResponse) {
+                        var locale = inResponse.locale;
+                        for (var i = 0, max = locale.length; i < max; i++) {
+                            if (locale[i].languageCode == languageCode) {
+                                successCallback(locale[i].languageName);
+                            }
+                        }
+                    },
+                    // return a languageCode when a request fails
+                    onFailure: function(inError) {
+                        successCallback(languageCode);
+                    }
+                });
+            },
+            onFailure: errorCallback
+        });
+    },
+    getLocaleName: function(successCallback, errorCallback) {
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var locale = inResponse.locale.languageCode + "_" + inResponse.locale.countryCode.toLocaleUpperCase();
+                successCallback(locale);
+            },
+            onFailure: errorCallback
+        });
     }
 };
 
@@ -6992,7 +7053,7 @@ navigator.connectionMonitor.start = function(onSuccess, onFailure) {
     onSuccess = this.onSuccess = onSuccess || this.onSuccess;
     this.onFailure = onFailure || this.onFailure;
     if(!navigator.connectionMonitor.request) {
-        navigator.connectionMonitor.request = service.request('palm://com.palm.connectionmanager', {
+        navigator.connectionMonitor.request = service.request('luna://com.palm.connectionmanager', {
             method: 'getstatus',
             parameters: { subscribe: true },
             onSuccess: function(result) {
@@ -7084,7 +7145,7 @@ module.exports = {
     vibrate: function(onSuccess, onFailure, args) {
         if(window.PalmSystem && window.PalmSystem.identifier.split(" ")[0].indexOf("com.palm.app.")==0) {
             var service = require('cordova/plugin/webos/service');
-            this.vibRequest = service.request("palm://com.palm.vibrate", {
+            this.vibRequest = service.request("luna://com.palm.vibrate", {
                 method: 'vibrate',
                 parameters: {
                     period: 0,
@@ -7589,6 +7650,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
     // Try to XHR the cordova_plugins.json file asynchronously.
     var xhr = new XMLHttpRequest();
     xhr.onload = function() {
+        xhr = null;
         // If the response is a JSON string which composes an array, call handlePluginsObject.
         // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
         var obj;
@@ -7604,6 +7666,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
         }
     };
     xhr.onerror = function() {
+        xhr = null;
         finishPluginLoading();
     };
     var plugins_json = path + 'cordova_plugins.json';
@@ -7611,6 +7674,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
         xhr.open('GET', plugins_json, true); // Async
         xhr.send();
     } catch(err){
+        xhr = null;
         finishPluginLoading();
     }
 }(window));
