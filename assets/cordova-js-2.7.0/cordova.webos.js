@@ -8,9 +8,9 @@
  to you under the Apache License, Version 2.0 (the
  "License"); you may not use this file except in compliance
  with the License.  You may obtain a copy of the License at
- 
+
      http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing,
  software distributed under the License is distributed on an
  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -6049,60 +6049,33 @@ module.exports = {
 define("cordova/plugin/webos/extras/localemonitor", function(require, exports, module) {
 
 //Monitors the for locale changes and emitts a document event is occurring.
-
-var service = require('cordova/plugin/webos/service');
+var callback;
 
 /*
  * webOS.localeMonitor.* namespace
+ *
+ * when LocaleMonitor is started (which it is by default), it turns the
+ * proprietary webOSLocaleChange event into a more "standard"
+ * "localechange" Cordova event with the new locale string attached
+ * to the event as data.
  */
 module.exports = {
     start: function() {
-        if(!this.request) {
-            this.request = service.request('luna://com.webos.settingsservice', {
-                method: 'getSystemSettings',
-                parameters: {
-                    keys: ["localeInfo"],
-                },
-                onSuccess: function (inResponse) {
-                    if(inResponse.settings.localeInfo) {
-                        if(navigator.localeInfo) {
-                            if((navigator.localeInfo.locales.UI !== inResponse.settings.localeInfo.locales.UI) ||
-                                    (navigator.localeInfo.timezone !== inResponse.settings.localeInfo.timezone) ||
-                                    (navigator.localeInfo.clock !== inResponse.settings.localeInfo.clock)) {
-                                cordova.fireDocumentEvent("localechange");
-                            }
-                        }
-                        navigator.localeInfo = inResponse.settings.localeInfo;
-                    }
-                },
-                onFailure: function(inError) {
-                    console.error("Locale monitor subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: false
-            })
+        document.removeEventListener("webOSLocaleChange", callback);
+        callback = function(event) {
+            cordova.fireDocumentEvent("localechange", {"locale": navigator.language});
         };
+        document.addEventListener("webOSLocaleChange", callback, true);
     },
-    stop: function() {
-        if(this.request) {
-            this.request.cancel();
-            this.request = undefined;
-        }
-    },
-
-    /**
-     * Gets the latest known locale details.
-     *
-     * @return Object                       Includes a "locale" object, "clock" string, and "timezone" string properties.
-     */
-    getInfo: function() {
-        return navigator.localeInfo;
+    stop: function(onSuccess, onFailure) {
+        document.removeEventListener("webOSLocaleChange", callback);
     }
 };
 
 document.addEventListener("deviceready", function() {
     module.exports.start();
 });
+
 });
 
 // file: lib\webos\plugin\webos\extras\notification.js
