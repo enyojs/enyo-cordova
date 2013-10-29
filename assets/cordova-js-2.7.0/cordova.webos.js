@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-200-g42ccefd
+// 2.7.0rc1-208-gaa3cc23
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -8,9 +8,9 @@
  to you under the Apache License, Version 2.0 (the
  "License"); you may not use this file except in compliance
  with the License.  You may obtain a copy of the License at
-
+ 
      http://www.apache.org/licenses/LICENSE-2.0
-
+ 
  Unless required by applicable law or agreed to in writing,
  software distributed under the License is distributed on an
  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-200-g42ccefd';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-208-gaa3cc23';
 // file: lib\scripts\require.js
 
 var require,
@@ -966,13 +966,12 @@ module.exports = {
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
             // Check for support for page visibility api
-            // Temporarily ignored until page visibility api is fixed and working
-            if(typeof document.webkitHidden !== "undefined" && false) {
+            if(typeof document.webkitHidden !== "undefined") {
                 document.addEventListener("webkitvisibilitychange", function(e) {
                     if(document.webkitHidden) {
-                        cordova.fireDocumentEvent("resume");
-                    } else {
                         cordova.fireDocumentEvent("pause");
+                    } else {
+                        cordova.fireDocumentEvent("resume");
                     }
                 });
 
@@ -5793,6 +5792,7 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 // file: lib\webos\plugin\webos\accelerometer.js
 define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
 
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var callback;
 var failureTimer;
 var clearTimer = function() {
@@ -5804,12 +5804,25 @@ var clearTimer = function() {
 
 module.exports = {
     start: function(onSuccess, onFailure) {
-        document.removeEventListener("acceleration", callback);
-        callback = function(event) {
-            clearTimer();
-            onSuccess({x:(event.accelX*-9.81), y:(event.accelY*-9.81), z:(event.accelZ*-9.81)});
-        };
-        document.addEventListener("acceleration", callback);
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({
+                    x: event.accelerationIncludingGravity.x,
+                    y: event.accelerationIncludingGravity.y,
+                    z: event.accelerationIncludingGravity.z
+                });
+            };
+            window.addEventListener("devicemotion", callback);
+        } else { // Legacy support for TouchPad and Pre3
+            document.removeEventListener("acceleration", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({x:(event.accelX*-9.81), y:(event.accelY*-9.81), z:(event.accelZ*-9.81)});
+            };
+            document.addEventListener("acceleration", callback);
+        }
         failureTimer = window.setTimeout(function() {
             clearTimer();
             onFailure({code:1, message:"Accelerometer not available"});
@@ -5817,7 +5830,11 @@ module.exports = {
     },
     stop: function(onSuccess, onFailure) {
         clearTimer();
-        document.removeEventListener("acceleration", callback);
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+        } else {
+            document.removeEventListener("acceleration", callback);
+        }
     }
 };
 
@@ -5832,7 +5849,7 @@ module.exports = {
     takePicture: function(successCallback, errorCallback, options) {
         var filename = (options || {}).filename | "";
 
-        service.request('luna://com.palm.applicationManager', {
+        service.request(service.protocol + service.systemPrefix + '.applicationManager', {
             method: 'launch',
             parameters: {
             id: 'com.palm.app.camera',
@@ -6075,7 +6092,6 @@ module.exports = {
 document.addEventListener("deviceready", function() {
     module.exports.start();
 });
-
 });
 
 // file: lib\webos\plugin\webos\extras\notification.js
@@ -7164,6 +7180,8 @@ module.exports = function(type,size,successCallback,errorCallback) {
 // file: lib\webos\plugin\webos\service.js
 define("cordova/plugin/webos/service", function(require, exports, module) {
 
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+
 function LS2Request(uri, params) {
     this.uri = uri;
     params = params || {};
@@ -7255,7 +7273,9 @@ module.exports = {
     request: function (uri, params) {
         var req = new LS2Request(uri, params);
         return req;
-    }
+    },
+    systemPrefix: ((isLegacy) ? "com.palm" : "com.webos"),
+    protocol: "luna://"
 };
 //temporary fallback for previous syntax
 module.exports.Request = module.exports.request;
