@@ -14,6 +14,6 @@
 		];
 		enyo.depends.apply(enyo, externalModules);
 	} else {
-		enyo.warn("Cordova not found, ignoring tv modules")
+		enyo.warn("Cordova not found, ignoring tv modules");
 	}
 })();
