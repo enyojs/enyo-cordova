@@ -1,5 +1,5 @@
 {
 	"packagejs": "./package.js",
-	"assets": [],
+	"assets": ["./tv-module-loader.js"],
 	"libs": []
 }

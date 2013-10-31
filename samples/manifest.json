@@ -5,12 +5,12 @@
 	"loadPackages": "$lib/enyo-cordova $lib/enyo-cordova/samples",
 	"samples": [
 		{"name": "Accelerometer", "path":"$lib/enyo-cordova/samples/Accelerometer", "css":"sample"},	
-		{"name": "Compass", "path":"$lib/enyo-cordova/samples/Compass"},
-		{"name": "Connection", "path":"$lib/enyo-cordova/samples/Connection"},
-		{"name": "Device", "path":"$lib/enyo-cordova/samples/Device"},
-		{"name": "Events", "path":"$lib/enyo-cordova/samples/Events"},
-		{"name": "Geolocation", "path":"$lib/enyo-cordova/samples/Geolocation"},
-		{"name": "Notification", "path":"$lib/enyo-cordova/samples/Notification"},
-		{"name": "webOS", "path":"$lib/enyo-cordova/samples/webOS"}
+		{"name": "Compass", "path":"$lib/enyo-cordova/samples/Compass", "css":"sample"},
+		{"name": "Connection", "path":"$lib/enyo-cordova/samples/Connection", "css":"sample"},
+		{"name": "Device", "path":"$lib/enyo-cordova/samples/Device", "css":"sample"},
+		{"name": "Events", "path":"$lib/enyo-cordova/samples/Events", "css":"sample"},
+		{"name": "Geolocation", "path":"$lib/enyo-cordova/samples/Geolocation", "css":"sample"},
+		{"name": "Notification", "path":"$lib/enyo-cordova/samples/Notification", "css":"sample"},
+		{"name": "webOS", "path":"$lib/enyo-cordova/samples/webOS", "css":"sample"}
 	]
 }

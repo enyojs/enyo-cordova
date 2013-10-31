@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-191-g356f485
+// 2.7.0rc1-208-gaa3cc23
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-191-g356f485';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-208-gaa3cc23';
 // file: lib\scripts\require.js
 
 var require,
@@ -813,7 +813,8 @@ var coreModules = {
     "Camera": require('cordova/plugin/webos/camera'),
     "Accelerometer" : require('cordova/plugin/webos/accelerometer'),
     "Notification" : require('cordova/plugin/webos/notification'),
-    "Geolocation": require('cordova/plugin/webos/geolocation')
+    "Geolocation": require('cordova/plugin/webos/geolocation'),
+    "Globalization": require('cordova/plugin/webos/globalization')
 };
 
 module.exports = function(success, fail, service, action, args) {
@@ -965,13 +966,12 @@ module.exports = {
         // wait for deviceready before listening and firing document events
         document.addEventListener("deviceready", function () {
             // Check for support for page visibility api
-            // Temporarily ignored until page visibility api is fixed and working
-            if(typeof document.webkitHidden !== "undefined" && false) {
+            if(typeof document.webkitHidden !== "undefined") {
                 document.addEventListener("webkitvisibilitychange", function(e) {
                     if(document.webkitHidden) {
-                        cordova.fireDocumentEvent("resume");
-                    } else {
                         cordova.fireDocumentEvent("pause");
+                    } else {
+                        cordova.fireDocumentEvent("resume");
                     }
                 });
 
@@ -5792,6 +5792,7 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 // file: lib\webos\plugin\webos\accelerometer.js
 define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
 
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var callback;
 var failureTimer;
 var clearTimer = function() {
@@ -5803,12 +5804,25 @@ var clearTimer = function() {
 
 module.exports = {
     start: function(onSuccess, onFailure) {
-        document.removeEventListener("acceleration", callback);
-        callback = function(event) {
-            clearTimer();
-            onSuccess({x:(event.accelX*-9.81), y:(event.accelY*-9.81), z:(event.accelZ*-9.81)});
-        };
-        document.addEventListener("acceleration", callback);
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({
+                    x: event.accelerationIncludingGravity.x,
+                    y: event.accelerationIncludingGravity.y,
+                    z: event.accelerationIncludingGravity.z
+                });
+            };
+            window.addEventListener("devicemotion", callback);
+        } else { // Legacy support for TouchPad and Pre3
+            document.removeEventListener("acceleration", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({x:(event.accelX*-9.81), y:(event.accelY*-9.81), z:(event.accelZ*-9.81)});
+            };
+            document.addEventListener("acceleration", callback);
+        }
         failureTimer = window.setTimeout(function() {
             clearTimer();
             onFailure({code:1, message:"Accelerometer not available"});
@@ -5816,7 +5830,11 @@ module.exports = {
     },
     stop: function(onSuccess, onFailure) {
         clearTimer();
-        document.removeEventListener("acceleration", callback);
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+        } else {
+            document.removeEventListener("acceleration", callback);
+        }
     }
 };
 
@@ -5831,7 +5849,7 @@ module.exports = {
     takePicture: function(successCallback, errorCallback, options) {
         var filename = (options || {}).filename | "";
 
-        service.request('palm://com.palm.applicationManager', {
+        service.request(service.protocol + service.systemPrefix + '.applicationManager', {
             method: 'launch',
             parameters: {
             id: 'com.palm.app.camera',
@@ -5888,7 +5906,7 @@ module.exports = {
         } catch(e) {
             failureCallback(e)
         }
-        service.request('palm://com.palm.preferences/systemProperties', {
+        service.request('luna://com.palm.preferences/systemProperties', {
             method:"Get",
             parameters:{"key": "com.palm.properties.nduid"},
             onSuccess: function(result) {
@@ -6048,54 +6066,26 @@ module.exports = {
 define("cordova/plugin/webos/extras/localemonitor", function(require, exports, module) {
 
 //Monitors the for locale changes and emitts a document event is occurring.
-
-var service = require('cordova/plugin/webos/service');
+var callback;
 
 /*
  * webOS.localeMonitor.* namespace
+ *
+ * when LocaleMonitor is started (which it is by default), it turns the
+ * proprietary webOSLocaleChange event into a more "standard"
+ * "localechange" Cordova event with the new locale string attached
+ * to the event as data.
  */
 module.exports = {
     start: function() {
-        if(!this.request) {
-            this.request = service.request('palm://com.webos.settingsservice', {
-                method: 'getSystemSettings',
-                parameters: {
-                    keys: ["localeInfo"],
-                },
-                onSuccess: function (inResponse) {
-                    if(inResponse.settings.localeInfo) {
-                        if(navigator.localeInfo) {
-                            if((navigator.localeInfo.locales.UI !== inResponse.settings.localeInfo.locales.UI) ||
-                                    (navigator.localeInfo.timezone !== inResponse.settings.localeInfo.timezone) ||
-                                    (navigator.localeInfo.clock !== inResponse.settings.localeInfo.clock)) {
-                                cordova.fireDocumentEvent("localechange");
-                            }
-                        }
-                        navigator.localeInfo = inResponse.settings.localeInfo;
-                    }
-                },
-                onFailure: function(inError) {
-                    console.error("Locale monitor subscribe:error");
-                },
-                subscribe: true,
-                resubscribe: false
-            })
+        document.removeEventListener("webOSLocaleChange", callback);
+        callback = function(event) {
+            cordova.fireDocumentEvent("localechange", {"locale": navigator.language});
         };
+        document.addEventListener("webOSLocaleChange", callback, true);
     },
-    stop: function() {
-        if(this.request) {
-            this.request.cancel();
-            this.request = undefined;
-        }
-    },
-
-    /**
-     * Gets the latest known locale details.
-     *
-     * @return Object                       Includes a "locale" object, "clock" string, and "timezone" string properties.
-     */
-    getInfo: function() {
-        return navigator.localeInfo;
+    stop: function(onSuccess, onFailure) {
+        document.removeEventListener("webOSLocaleChange", callback);
     }
 };
 
@@ -6179,7 +6169,7 @@ module.exports = {
                     reqParam.onclick = {appId:appId, params:toastParams};
                 }
             }
-            this.showToastRequest = service.request("palm://com.webos.notification", {
+            this.showToastRequest = service.request("luna://com.webos.notification", {
                 method: "createToast",
                 parameters: reqParam,
                 onSuccess: function(inResponse) {
@@ -6208,7 +6198,7 @@ module.exports = {
                 PalmSystem.clearBannerMessage();
             }
         } else {
-            this.removeToastRequest = service.request("palm://com.webos.notification", {
+            this.removeToastRequest = service.request("luna://com.webos.notification", {
                 method: "cancelToast",
                 parameters: {toastId:id}
             });
@@ -6321,7 +6311,11 @@ var log = function(level, messageId, keyVals, freeText) {
             keyVals = JSON.stringify(keyVals);
         }
         if(window.PalmSystem.PmLogString) {
-            window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
+            if(level==levelDebug) { //debug only accepts 2 arguments
+                window.PalmSystem.PmLogString(level, freeText);
+            } else {
+                window.PalmSystem.PmLogString(level, messageId, keyVals, freeText);
+            }
         } else {
             console.error("Unable to send log; PmLogString not found in this version of PalmSystem");
         }
@@ -6747,6 +6741,7 @@ FileReader.prototype.readAsText = function(file, encoding) {
                     me.onloadend(new ProgressEvent("loadend", {target:me}));
                 }
             }
+            xhr = null;
         }
     };
     xhr.open("GET", file, true);
@@ -6779,7 +6774,7 @@ module.exports = {
     requests: [],
     watched: {},
     getLocation: function(successCallback, failureCallback, options) {
-        var request = this.requests[requests.length] = service.request('palm://com.palm.location', {
+        var request = this.requests[requests.length] = service.request('luna://com.palm.location', {
             method: "getCurrentPosition",
             parameters: {
                 accuracy: ((options[0]==true) ? 1 : 2),
@@ -6812,7 +6807,7 @@ module.exports = {
         });
     },
     addWatch: function(successCallback, failureCallback, options) {
-        this.watched[options[0]] = service.request('palm://com.palm.location', {
+        this.watched[options[0]] = service.request('luna://com.palm.location', {
             method: "startTracking",
             parameters: {
                 accuracy: ((options[1]==true) ? 1 : 2),
@@ -6845,6 +6840,61 @@ module.exports = {
             this.watched[options[0]].cancel();
             delete this.watched[options[0]];
         }
+    }
+};
+
+});
+
+// file: lib\webos\plugin\webos\globalization.js
+define("cordova/plugin/webos/globalization", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+
+module.exports = {
+    getPreferredLanguage: function(successCallback, errorCallback) {
+        // get a languageCode (e.g. en)
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var languageCode = inResponse.locale.languageCode;
+                // get a languageName (e.g. English) from the languageCode
+                service.request('luna://com.palm.systemservice', {
+                    method: 'getPreferenceValues',
+                    parameters: {
+                        'key': 'locale'
+                    },
+                    onSuccess: function(inResponse) {
+                        var locale = inResponse.locale;
+                        for (var i = 0, max = locale.length; i < max; i++) {
+                            if (locale[i].languageCode == languageCode) {
+                                successCallback(locale[i].languageName);
+                            }
+                        }
+                    },
+                    // return a languageCode when a request fails
+                    onFailure: function(inError) {
+                        successCallback(languageCode);
+                    }
+                });
+            },
+            onFailure: errorCallback
+        });
+    },
+    getLocaleName: function(successCallback, errorCallback) {
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var locale = inResponse.locale.languageCode + "_" + inResponse.locale.countryCode.toLocaleUpperCase();
+                successCallback(locale);
+            },
+            onFailure: errorCallback
+        });
     }
 };
 
@@ -6992,7 +7042,7 @@ navigator.connectionMonitor.start = function(onSuccess, onFailure) {
     onSuccess = this.onSuccess = onSuccess || this.onSuccess;
     this.onFailure = onFailure || this.onFailure;
     if(!navigator.connectionMonitor.request) {
-        navigator.connectionMonitor.request = service.request('palm://com.palm.connectionmanager', {
+        navigator.connectionMonitor.request = service.request('luna://com.palm.connectionmanager', {
             method: 'getstatus',
             parameters: { subscribe: true },
             onSuccess: function(result) {
@@ -7084,7 +7134,7 @@ module.exports = {
     vibrate: function(onSuccess, onFailure, args) {
         if(window.PalmSystem && window.PalmSystem.identifier.split(" ")[0].indexOf("com.palm.app.")==0) {
             var service = require('cordova/plugin/webos/service');
-            this.vibRequest = service.request("palm://com.palm.vibrate", {
+            this.vibRequest = service.request("luna://com.palm.vibrate", {
                 method: 'vibrate',
                 parameters: {
                     period: 0,
@@ -7129,6 +7179,8 @@ module.exports = function(type,size,successCallback,errorCallback) {
 
 // file: lib\webos\plugin\webos\service.js
 define("cordova/plugin/webos/service", function(require, exports, module) {
+
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 
 function LS2Request(uri, params) {
     this.uri = uri;
@@ -7221,7 +7273,9 @@ module.exports = {
     request: function (uri, params) {
         var req = new LS2Request(uri, params);
         return req;
-    }
+    },
+    systemPrefix: ((isLegacy) ? "com.palm" : "com.webos"),
+    protocol: "luna://"
 };
 //temporary fallback for previous syntax
 module.exports.Request = module.exports.request;
@@ -7589,6 +7643,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
     // Try to XHR the cordova_plugins.json file asynchronously.
     var xhr = new XMLHttpRequest();
     xhr.onload = function() {
+        xhr = null;
         // If the response is a JSON string which composes an array, call handlePluginsObject.
         // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
         var obj;
@@ -7604,6 +7659,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
         }
     };
     xhr.onerror = function() {
+        xhr = null;
         finishPluginLoading();
     };
     var plugins_json = path + 'cordova_plugins.json';
@@ -7611,6 +7667,7 @@ if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
         xhr.open('GET', plugins_json, true); // Async
         xhr.send();
     } catch(err){
+        xhr = null;
         finishPluginLoading();
     }
 }(window));
