@@ -1,5 +1,5 @@
 // Platform: webos
-// 2.7.0rc1-208-gaa3cc23
+// 2.7.0rc1-210-gcc098e5
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,7 +19,7 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-208-gaa3cc23';
+var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-210-gcc098e5';
 // file: lib\scripts\require.js
 
 var require,
@@ -6483,6 +6483,8 @@ mixin(navigator.notification, require("cordova/plugin/webos/extras/notification"
 // file: lib\webos\plugin\webos\extras\window.js
 define("cordova/plugin/webos/extras/window", function(require, exports, module) {
 
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+
 /*
  * webOS.window.* namespace
  */
@@ -6549,11 +6551,14 @@ module.exports={
     newCard: function(url, html) {
         var modulemapper = require('cordova/modulemapper');
         var origOpen = modulemapper.getOriginalSymbol(window, 'open');
+        if(!url && !isLegacy) {
+            url = "about:blank";
+        }
         var child = origOpen(url);
         if(html) {
             child.document.write(html);
         }
-        if(child.PalmSystem) {
+        if(child.PalmSystem && isLegacy) {
             child.PalmSystem.stageReady();
         }
         return child;
@@ -6903,6 +6908,7 @@ module.exports = {
 // file: lib\webos\plugin\webos\inappbrowser.js
 define("cordova/plugin/webos/inappbrowser", function(require, exports, module) {
 
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
 var channel = require('cordova/channel');
 var modulemapper = require('cordova/modulemapper');
 var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
@@ -6916,10 +6922,13 @@ var fireWindowEvent = function(win, data) {
 };
 
 module.exports = function(strUrl, strWindowName, strWindowFeatures) {
+    if(!strUrl && !isLegacy) {
+        strUrl = "about:blank";
+    }
     var child = origOpenFunc.apply(window, arguments);
 
     if(child) {
-        if(child.PalmSystem) {
+        if(child.PalmSystem && isLegacy) {
             child.PalmSystem.stageReady();
         }
         //window has been created, so fire "loadstart" immediately
