@@ -6,6 +6,5 @@ enyo.depends(
 	"Device.js",
 	"Events.js",
 	"Geolocation.js",
-	"Notification.js",
-	"webOS.js"
+	"Notification.js"
 );
