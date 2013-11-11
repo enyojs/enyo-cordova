@@ -10,7 +10,6 @@
 		{"name": "Device", "path":"$lib/enyo-cordova/samples/Device", "css":"sample"},
 		{"name": "Events", "path":"$lib/enyo-cordova/samples/Events", "css":"sample"},
 		{"name": "Geolocation", "path":"$lib/enyo-cordova/samples/Geolocation", "css":"sample"},
-		{"name": "Notification", "path":"$lib/enyo-cordova/samples/Notification", "css":"sample"},
-		{"name": "webOS", "path":"$lib/enyo-cordova/samples/webOS", "css":"sample"}
+		{"name": "Notification", "path":"$lib/enyo-cordova/samples/Notification", "css":"sample"}
 	]
 }
