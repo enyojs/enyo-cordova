@@ -12,7 +12,7 @@
 			"/usr/palm/frameworks/cordova-tv/" + v + "/push.js",
 			"/usr/palm/frameworks/cordova-tv/" + v + "/upnp.js"
 		];
-		enyo.depends.apply(enyo, externalModules);
+		enyo.load.apply(enyo, externalModules);
 	} else {
 		enyo.warn("Cordova not found, ignoring tv modules");
 	}
