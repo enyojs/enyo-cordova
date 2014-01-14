@@ -36,7 +36,7 @@ Loads the cordova.js file for the current platform.
 		}
 		if (platform) {
 			var fn = "$lib/enyo-cordova/assets/cordova-js-" + cordovaVersion + "/cordova." + platform + ".js";
-			enyo.depends(fn);
+			enyo.load(fn);
 		} else {
 			enyo.warn("Cordova not loaded: Current platform not supported.");
 		}
