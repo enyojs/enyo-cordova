@@ -1,5 +1,5 @@
-// Platform: osx
-// 2.7.0rc1-128-gbab9173
+// Platform: webos
+// 2.9.1
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -19,8 +19,8 @@
  under the License.
 */
 ;(function() {
-var CORDOVA_JS_BUILD_LABEL = '2.7.0rc1-128-gbab9173';
-// file: lib\scripts\require.js
+var CORDOVA_JS_BUILD_LABEL = '2.9.1';
+// file: lib/scripts/require.js
 
 var require,
     define;
@@ -100,6 +100,7 @@ define("cordova", function(require, exports, module) {
 
 
 var channel = require('cordova/channel');
+var platform = require('cordova/platform');
 
 /**
  * Listen for DOMContentLoaded and notify our channel subscribers.
@@ -182,10 +183,18 @@ if(typeof window.console === "undefined") {
         log:function(){}
     };
 }
+// there are places in the framework where we call `warn` also, so we should make sure it exists
+if(typeof window.console.warn === "undefined") {
+    window.console.warn = function(msg) {
+        this.log("warn: " + msg);
+    };
+}
 
 var cordova = {
     define:define,
     require:require,
+    version:CORDOVA_JS_BUILD_LABEL,
+    platformId:platform.id,
     /**
      * Methods to add/remove your own addEventListener hijacking on document + window.
      */
@@ -221,16 +230,16 @@ var cordova = {
         var evt = createEvent(type, data);
         if (typeof documentEventHandlers[type] != 'undefined') {
             if( bNoDetach ) {
-              documentEventHandlers[type].fire(evt);
+                documentEventHandlers[type].fire(evt);
             }
             else {
-              setTimeout(function() {
-                  // Fire deviceready on listeners that were registered before cordova.js was loaded.
-                  if (type == 'deviceready') {
-                      document.dispatchEvent(evt);
-                  }
-                  documentEventHandlers[type].fire(evt);
-              }, 0);
+                setTimeout(function() {
+                    // Fire deviceready on listeners that were registered before cordova.js was loaded.
+                    if (type == 'deviceready') {
+                        document.dispatchEvent(evt);
+                    }
+                    documentEventHandlers[type].fire(evt);
+                }, 0);
             }
         } else {
             document.dispatchEvent(evt);
@@ -329,7 +338,7 @@ module.exports = cordova;
 
 });
 
-// file: lib\common\argscheck.js
+// file: lib/common/argscheck.js
 define("cordova/argscheck", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -347,7 +356,7 @@ var typeMap = {
 };
 
 function extractParamName(callee, argIndex) {
-  return (/.*?\((.*?)\)/).exec(callee)[1].split(', ')[argIndex];
+    return (/.*?\((.*?)\)/).exec(callee)[1].split(', ')[argIndex];
 }
 
 function checkArgs(spec, functionName, args, opt_callee) {
@@ -376,7 +385,7 @@ function checkArgs(spec, functionName, args, opt_callee) {
     if (errMsg) {
         errMsg += ', but got ' + typeName + '.';
         errMsg = 'Wrong type for parameter "' + extractParamName(opt_callee || args.callee, i) + '" of ' + functionName + ': ' + errMsg;
-        // Don't log when running jake test.
+        // Don't log when running unit tests.
         if (typeof jasmine == 'undefined') {
             console.error(errMsg);
         }
@@ -395,7 +404,63 @@ moduleExports.enableChecks = true;
 
 });
 
-// file: lib\common\builder.js
+// file: lib/common/base64.js
+define("cordova/base64", function(require, exports, module) {
+
+var base64 = exports;
+
+base64.fromArrayBuffer = function(arrayBuffer) {
+    var array = new Uint8Array(arrayBuffer);
+    return uint8ToBase64(array);
+};
+
+//------------------------------------------------------------------------------
+
+/* This code is based on the performance tests at http://jsperf.com/b64tests
+ * This 12-bit-at-a-time algorithm was the best performing version on all
+ * platforms tested.
+ */
+
+var b64_6bit = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var b64_12bit;
+
+var b64_12bitTable = function() {
+    b64_12bit = [];
+    for (var i=0; i<64; i++) {
+        for (var j=0; j<64; j++) {
+            b64_12bit[i*64+j] = b64_6bit[i] + b64_6bit[j];
+        }
+    }
+    b64_12bitTable = function() { return b64_12bit; };
+    return b64_12bit;
+};
+
+function uint8ToBase64(rawData) {
+    var numBytes = rawData.byteLength;
+    var output="";
+    var segment;
+    var table = b64_12bitTable();
+    for (var i=0;i<numBytes-2;i+=3) {
+        segment = (rawData[i] << 16) + (rawData[i+1] << 8) + rawData[i+2];
+        output += table[segment >> 12];
+        output += table[segment & 0xfff];
+    }
+    if (numBytes - i == 2) {
+        segment = (rawData[i] << 16) + (rawData[i+1] << 8);
+        output += table[segment >> 12];
+        output += b64_6bit[(segment & 0xfff) >> 6];
+        output += '=';
+    } else if (numBytes - i == 1) {
+        segment = (rawData[i] << 16);
+        output += table[segment >> 12];
+        output += '==';
+    }
+    return output;
+}
+
+});
+
+// file: lib/common/builder.js
 define("cordova/builder", function(require, exports, module) {
 
 var utils = require('cordova/utils');
@@ -435,36 +500,36 @@ function assignOrWrapInDeprecateGetter(obj, key, value, message) {
 function include(parent, objects, clobber, merge) {
     each(objects, function (obj, key) {
         try {
-          var result = obj.path ? require(obj.path) : {};
+            var result = obj.path ? require(obj.path) : {};
 
-          if (clobber) {
-              // Clobber if it doesn't exist.
-              if (typeof parent[key] === 'undefined') {
-                  assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
-              } else if (typeof obj.path !== 'undefined') {
-                  // If merging, merge properties onto parent, otherwise, clobber.
-                  if (merge) {
-                      recursiveMerge(parent[key], result);
-                  } else {
-                      assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
-                  }
-              }
-              result = parent[key];
-          } else {
-            // Overwrite if not currently defined.
-            if (typeof parent[key] == 'undefined') {
-              assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+            if (clobber) {
+                // Clobber if it doesn't exist.
+                if (typeof parent[key] === 'undefined') {
+                    assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                } else if (typeof obj.path !== 'undefined') {
+                    // If merging, merge properties onto parent, otherwise, clobber.
+                    if (merge) {
+                        recursiveMerge(parent[key], result);
+                    } else {
+                        assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                    }
+                }
+                result = parent[key];
             } else {
-              // Set result to what already exists, so we can build children into it if they exist.
-              result = parent[key];
+                // Overwrite if not currently defined.
+                if (typeof parent[key] == 'undefined') {
+                    assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                } else {
+                    // Set result to what already exists, so we can build children into it if they exist.
+                    result = parent[key];
+                }
             }
-          }
 
-          if (obj.children) {
-            include(result, obj.children, clobber, merge);
-          }
+            if (obj.children) {
+                include(result, obj.children, clobber, merge);
+            }
         } catch(e) {
-          utils.alert('Exception building cordova JS globals: ' + e + ' for key "' + key + '"');
+            utils.alert('Exception building cordova JS globals: ' + e + ' for key "' + key + '"');
         }
     });
 }
@@ -508,7 +573,7 @@ exports.replaceHookForTesting = function() {};
 
 });
 
-// file: lib\common\channel.js
+// file: lib/common/channel.js
 define("cordova/channel", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -758,7 +823,7 @@ module.exports = channel;
 
 });
 
-// file: lib\common\commandProxy.js
+// file: lib/common/commandProxy.js
 define("cordova/commandProxy", function(require, exports, module) {
 
 
@@ -788,114 +853,49 @@ module.exports = {
 };
 });
 
-// file: lib\osx\exec.js
+// file: lib/webos/exec.js
 define("cordova/exec", function(require, exports, module) {
 
 /**
- * Creates a gap bridge used to notify the native code about commands.
-
- * @private
+ * Execute a cordova command.  It is up to the native side whether this action
+ * is synchronous or asynchronous.  The native side can return:
+ *      Synchronous: PluginResult object as a JSON string
+ *      Asynchrounous: Empty string ""
+ * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
+ * depending upon the result of the action.
+ *
+ * @param {Function} success    The success callback
+ * @param {Function} fail       The fail callback
+ * @param {String} service      The name of the service to use
+ * @param {String} action       Action to be run in cordova
+ * @param {String[]} [args]     Zero or more arguments to pass to the method
  */
-var cordova = require('cordova'),
-    channel = require('cordova/channel'),
-    utils = require('cordova/utils');
 
-
-function massageMessageNativeToJs(message) {
-    if (message.CDVType == 'ArrayBuffer') {
-        var stringToArrayBuffer = function(str) {
-            var ret = new Uint8Array(str.length);
-            for (var i = 0; i < str.length; i++) {
-                ret[i] = str.charCodeAt(i);
-            }
-            return ret.buffer;
-        };
-        var base64ToArrayBuffer = function(b64) {
-            return stringToArrayBuffer(atob(b64));
-        };
-        message = base64ToArrayBuffer(message.data);
-    }
-    return message;
-}
-
-function convertMessageToArgsNativeToJs(message) {
-    var args = [];
-    if (!message || !message.hasOwnProperty('CDVType')) {
-        args.push(message);
-    } else if (message.CDVType == 'MultiPart') {
-        message.messages.forEach(function(e) {
-            args.push(massageMessageNativeToJs(e));
-        });
-    } else {
-        args.push(massageMessageNativeToJs(message));
-    }
-    return args;
-}
-
-function massageArgsJsToNative(args) {
-    if (!args || utils.typeName(args) != 'Array') {
-       return args;
-    }
-    var ret = [];
-    var encodeArrayBufferAs8bitString = function(ab) {
-        return String.fromCharCode.apply(null, new Uint8Array(ab));
-    };
-    var encodeArrayBufferAsBase64 = function(ab) {
-        return window.btoa(encodeArrayBufferAs8bitString(ab));
-    };
-    args.forEach(function(arg, i) {
-        if (utils.typeName(arg) == 'ArrayBuffer') {
-            ret.push({
-                'CDVType': 'ArrayBuffer',
-                'data': encodeArrayBufferAsBase64(arg)
-            });
-        } else {
-            ret.push(arg);
-        }
-    });
-    return ret;
-}
-
-function OSXExec() {
-
-    var successCallback, failCallback, service, action, actionArgs, splitCommand;
-    var callbackId = 'INVALID';
-
-    successCallback = arguments[0];
-    failCallback = arguments[1];
-    service = arguments[2];
-    action = arguments[3];
-    actionArgs = arguments[4];
-
-    // Register the callbacks and add the callbackId to the positional
-    // arguments if given.
-    if (successCallback || failCallback) {
-        callbackId = service + cordova.callbackId++;
-        cordova.callbacks[callbackId] =
-            {success:successCallback, fail:failCallback};
-    }
-
-     actionArgs = massageArgsJsToNative(actionArgs);
-
-    if (window.cordovabridge && window.cordovabridge.exec) {
-        window.cordovabridge.exec(callbackId, service, action, actionArgs);
-    } else {
-        alert('window.cordovabridge binding is missing.');
-    }
-}
-
-
-OSXExec.nativeCallback = function(callbackId, status, message, keepCallback) {
-    var success = status === 0 || status === 1;
-    var args = convertMessageToArgsNativeToJs(message);
-    cordova.callbackFromNative(callbackId, success, status, args, keepCallback);
+var coreModules = {
+    "Device": require('cordova/plugin/webos/device'),
+    "NetworkStatus": require('cordova/plugin/webos/network'),
+    "Compass": require('cordova/plugin/webos/compass'),
+    "Camera": require('cordova/plugin/webos/camera'),
+    "Accelerometer" : require('cordova/plugin/webos/accelerometer'),
+    "Notification" : require('cordova/plugin/webos/notification'),
+    "Geolocation": require('cordova/plugin/webos/geolocation'),
+    "Globalization": require('cordova/plugin/webos/globalization')
 };
 
-module.exports = OSXExec;
+module.exports = function(success, fail, service, action, args) {
+    try {
+        console.log("exec: " + service + "." + action);
+        coreModules[service][action](success, fail, args);
+    }
+    catch(e) {
+        console.error("missing exec: " + service + "." + action);
+        console.error(e.stack);
+    }
+};
 
 });
 
-// file: lib\common\modulemapper.js
+// file: lib/common/modulemapper.js
 define("cordova/modulemapper", function(require, exports, module) {
 
 var builder = require('cordova/builder'),
@@ -931,6 +931,10 @@ exports.defaults = function(moduleName, symbolPath, opt_deprecationMessage) {
     addEntry('d', moduleName, symbolPath, opt_deprecationMessage);
 };
 
+exports.runs = function(moduleName) {
+    addEntry('r', moduleName, null);
+};
+
 function prepareNamespace(symbolPath, context) {
     if (!symbolPath) {
         return context;
@@ -949,12 +953,16 @@ exports.mapModules = function(context) {
     for (var i = 0, len = symbolList.length; i < len; i += 3) {
         var strategy = symbolList[i];
         var moduleName = symbolList[i + 1];
+        var module = require(moduleName);
+        // <runs/>
+        if (strategy == 'r') {
+            continue;
+        }
         var symbolPath = symbolList[i + 2];
         var lastDot = symbolPath.lastIndexOf('.');
         var namespace = symbolPath.substr(0, lastDot);
         var lastName = symbolPath.substr(lastDot + 1);
 
-        var module = require(moduleName);
         var deprecationMsg = symbolPath in deprecationMap ? 'Access made to deprecated symbol: ' + symbolPath + '. ' + deprecationMsg : null;
         var parentObj = prepareNamespace(namespace, context);
         var target = parentObj[lastName];
@@ -996,25 +1004,128 @@ exports.reset();
 
 });
 
-// file: lib\osx\platform.js
+// file: lib/webos/platform.js
 define("cordova/platform", function(require, exports, module) {
 
+/*global Mojo:false */
+
+var cordova = require('cordova');
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var externalWebOSLib = (window.webOS!=undefined);
+
 module.exports = {
-    id: "osx",
-    initialize:function() {
+    id: "webos",
+    initialize: function() {
         var modulemapper = require('cordova/modulemapper');
-
-        modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
-
         modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
+
+        //navigator.service.request required for Cordova core to function
+        modulemapper.merges('cordova/plugin/webos/service', 'navigator.service');
+
+        if(!externalWebOSLib) {
+            //set the webOS stage as ready for old webOS
+            if(window.PalmSystem && isLegacy) {
+                window.PalmSystem.stageReady();
+            }
+        }
+
         modulemapper.mapModules(window);
+
+        // temporary workaround for GF-41155; remove once fixed at a lower level
+        var pauseListeners = [];
+        var resumeListeners = [];
+        var origAddEventListener = document.addEventListener;
+        var origRemoveEventListener = document.removeEventListener;
+        document.addEventListener = function(type, handler) {
+            if(type=="pause") {
+                pauseListeners.push(handler);
+            } else if(type=="resume") {
+                resumeListeners.push(handler);
+            } else {
+                origAddEventListener.apply(document, arguments);
+            }
+        };
+        document.removeEventListener = function(type, handler) {
+            if(type=="pause") {
+                var iPause = pauseListeners.indexOf(handler);
+                if(iPause>-1) {
+                    pauseListeners.splice(iPause, 1);
+                }
+            } else if(type=="resume") {
+                var iResume = resumeListeners.indexOf(handler);
+                if(iResume>-1) {
+                    resumeListeners.splice(iResume, 1);
+                }
+            } else {
+                origRemoveEventListener.apply(document, arguments);
+            }
+        };
+        var fireEventSync = function(eName, eHandlers) {
+            for(var i=0; i<eHandlers.length; i++) {
+                eHandlers[i] && eHandlers[i]({type:eName});
+            }
+        };
+
+
+        // create global Mojo object if it does not exist
+        Mojo = window.Mojo || {};
+
+        // wait for deviceready before listening and firing document events
+        document.addEventListener("deviceready", function () {
+            // Check for support for page visibility api
+            if(typeof document.webkitHidden !== "undefined") {
+                document.addEventListener("webkitvisibilitychange", function(e) {
+                    if(document.webkitHidden) {
+                        //cordova.fireDocumentEvent("pause");
+                        fireEventSync("pause", pauseListeners);
+                    } else {
+                        //cordova.fireDocumentEvent("resume");
+                        fireEventSync("resume", resumeListeners);
+                    }
+                });
+
+            } else {
+                // LunaSysMgr calls this when the windows is maximized or opened.
+                window.Mojo.stageActivated = function() {
+                    cordova.fireDocumentEvent("resume");
+                };
+                // LunaSysMgr calls this when the windows is minimized or closed.
+                window.Mojo.stageDeactivated = function() {
+                    cordova.fireDocumentEvent("pause");
+                };
+            }
+
+            if(isLegacy && !externalWebOSLib) {
+                //emulate new webOS launch/relaunch events on old devices
+                var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
+                cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
+
+                // LunaSysMgr calls this whenever an app is "launched;"
+                window.Mojo.relaunch = function(e) {
+                    var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
+                    if(lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
+                        cordova.fireDocumentEvent("menubutton");
+                        return true;
+                    } else {
+                        cordova.fireDocumentEvent("webOSRelaunch", {type:"webOSRelaunch", detail:lp});
+                    }
+                };
+            }
+
+            document.addEventListener("keydown", function(e) {
+                // back gesture/button varies by version and build
+                if(e.keyCode == 27 || e.keyCode == 461 || e.keyIdentifier == "U+1200001" ||
+                        e.keyIdentifier == "U+001B" || e.keyIdentifier == "Back") {
+                    cordova.fireDocumentEvent("backbutton", e);
+                }
+            });
+        });
     }
 };
 
-
 });
 
-// file: lib\common\plugin\Acceleration.js
+// file: lib/common/plugin/Acceleration.js
 define("cordova/plugin/Acceleration", function(require, exports, module) {
 
 var Acceleration = function(x, y, z, timestamp) {
@@ -1028,7 +1139,7 @@ module.exports = Acceleration;
 
 });
 
-// file: lib\common\plugin\Camera.js
+// file: lib/common/plugin/Camera.js
 define("cordova/plugin/Camera", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1086,7 +1197,7 @@ module.exports = cameraExport;
 
 });
 
-// file: lib\common\plugin\CameraConstants.js
+// file: lib/common/plugin/CameraConstants.js
 define("cordova/plugin/CameraConstants", function(require, exports, module) {
 
 module.exports = {
@@ -1124,7 +1235,7 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\CameraPopoverHandle.js
+// file: lib/common/plugin/CameraPopoverHandle.js
 define("cordova/plugin/CameraPopoverHandle", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -1142,7 +1253,7 @@ module.exports = CameraPopoverHandle;
 
 });
 
-// file: lib\common\plugin\CameraPopoverOptions.js
+// file: lib/common/plugin/CameraPopoverOptions.js
 define("cordova/plugin/CameraPopoverOptions", function(require, exports, module) {
 
 var Camera = require('cordova/plugin/CameraConstants');
@@ -1164,7 +1275,7 @@ module.exports = CameraPopoverOptions;
 
 });
 
-// file: lib\common\plugin\CaptureAudioOptions.js
+// file: lib/common/plugin/CaptureAudioOptions.js
 define("cordova/plugin/CaptureAudioOptions", function(require, exports, module) {
 
 /**
@@ -1181,7 +1292,7 @@ module.exports = CaptureAudioOptions;
 
 });
 
-// file: lib\common\plugin\CaptureError.js
+// file: lib/common/plugin/CaptureError.js
 define("cordova/plugin/CaptureError", function(require, exports, module) {
 
 /**
@@ -1206,7 +1317,7 @@ module.exports = CaptureError;
 
 });
 
-// file: lib\common\plugin\CaptureImageOptions.js
+// file: lib/common/plugin/CaptureImageOptions.js
 define("cordova/plugin/CaptureImageOptions", function(require, exports, module) {
 
 /**
@@ -1221,7 +1332,7 @@ module.exports = CaptureImageOptions;
 
 });
 
-// file: lib\common\plugin\CaptureVideoOptions.js
+// file: lib/common/plugin/CaptureVideoOptions.js
 define("cordova/plugin/CaptureVideoOptions", function(require, exports, module) {
 
 /**
@@ -1238,7 +1349,7 @@ module.exports = CaptureVideoOptions;
 
 });
 
-// file: lib\common\plugin\CompassError.js
+// file: lib/common/plugin/CompassError.js
 define("cordova/plugin/CompassError", function(require, exports, module) {
 
 /**
@@ -1257,7 +1368,7 @@ module.exports = CompassError;
 
 });
 
-// file: lib\common\plugin\CompassHeading.js
+// file: lib/common/plugin/CompassHeading.js
 define("cordova/plugin/CompassHeading", function(require, exports, module) {
 
 var CompassHeading = function(magneticHeading, trueHeading, headingAccuracy, timestamp) {
@@ -1271,7 +1382,7 @@ module.exports = CompassHeading;
 
 });
 
-// file: lib\common\plugin\ConfigurationData.js
+// file: lib/common/plugin/ConfigurationData.js
 define("cordova/plugin/ConfigurationData", function(require, exports, module) {
 
 /**
@@ -1292,7 +1403,7 @@ module.exports = ConfigurationData;
 
 });
 
-// file: lib\common\plugin\Connection.js
+// file: lib/common/plugin/Connection.js
 define("cordova/plugin/Connection", function(require, exports, module) {
 
 /**
@@ -1311,7 +1422,7 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\Contact.js
+// file: lib/common/plugin/Contact.js
 define("cordova/plugin/Contact", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1473,7 +1584,7 @@ module.exports = Contact;
 
 });
 
-// file: lib\common\plugin\ContactAddress.js
+// file: lib/common/plugin/ContactAddress.js
 define("cordova/plugin/ContactAddress", function(require, exports, module) {
 
 /**
@@ -1504,7 +1615,7 @@ module.exports = ContactAddress;
 
 });
 
-// file: lib\common\plugin\ContactError.js
+// file: lib/common/plugin/ContactError.js
 define("cordova/plugin/ContactError", function(require, exports, module) {
 
 /**
@@ -1531,7 +1642,7 @@ module.exports = ContactError;
 
 });
 
-// file: lib\common\plugin\ContactField.js
+// file: lib/common/plugin/ContactField.js
 define("cordova/plugin/ContactField", function(require, exports, module) {
 
 /**
@@ -1553,7 +1664,7 @@ module.exports = ContactField;
 
 });
 
-// file: lib\common\plugin\ContactFindOptions.js
+// file: lib/common/plugin/ContactFindOptions.js
 define("cordova/plugin/ContactFindOptions", function(require, exports, module) {
 
 /**
@@ -1572,7 +1683,7 @@ module.exports = ContactFindOptions;
 
 });
 
-// file: lib\common\plugin\ContactName.js
+// file: lib/common/plugin/ContactName.js
 define("cordova/plugin/ContactName", function(require, exports, module) {
 
 /**
@@ -1598,7 +1709,7 @@ module.exports = ContactName;
 
 });
 
-// file: lib\common\plugin\ContactOrganization.js
+// file: lib/common/plugin/ContactOrganization.js
 define("cordova/plugin/ContactOrganization", function(require, exports, module) {
 
 /**
@@ -1627,7 +1738,7 @@ module.exports = ContactOrganization;
 
 });
 
-// file: lib\common\plugin\Coordinates.js
+// file: lib/common/plugin/Coordinates.js
 define("cordova/plugin/Coordinates", function(require, exports, module) {
 
 /**
@@ -1681,7 +1792,7 @@ module.exports = Coordinates;
 
 });
 
-// file: lib\common\plugin\DirectoryEntry.js
+// file: lib/common/plugin/DirectoryEntry.js
 define("cordova/plugin/DirectoryEntry", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1772,7 +1883,7 @@ module.exports = DirectoryEntry;
 
 });
 
-// file: lib\common\plugin\DirectoryReader.js
+// file: lib/common/plugin/DirectoryReader.js
 define("cordova/plugin/DirectoryReader", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -1783,6 +1894,7 @@ var exec = require('cordova/exec'),
  */
 function DirectoryReader(path) {
     this.path = path || null;
+    this.hasReadEntries = false;
 }
 
 /**
@@ -1792,6 +1904,12 @@ function DirectoryReader(path) {
  * @param {Function} errorCallback is called with a FileError
  */
 DirectoryReader.prototype.readEntries = function(successCallback, errorCallback) {
+    // If we've already read and passed on this directory's entries, return an empty list.
+    if (this.hasReadEntries) {
+        successCallback([]);
+        return;
+    }
+    var reader = this;
     var win = typeof successCallback !== 'function' ? null : function(result) {
         var retVal = [];
         for (var i=0; i<result.length; i++) {
@@ -1808,6 +1926,7 @@ DirectoryReader.prototype.readEntries = function(successCallback, errorCallback)
             entry.fullPath = result[i].fullPath;
             retVal.push(entry);
         }
+        reader.hasReadEntries = true;
         successCallback(retVal);
     };
     var fail = typeof errorCallback !== 'function' ? null : function(code) {
@@ -1820,7 +1939,7 @@ module.exports = DirectoryReader;
 
 });
 
-// file: lib\common\plugin\Entry.js
+// file: lib/common/plugin/Entry.js
 define("cordova/plugin/Entry", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -2025,7 +2144,7 @@ module.exports = Entry;
 
 });
 
-// file: lib\common\plugin\File.js
+// file: lib/common/plugin/File.js
 define("cordova/plugin/File", function(require, exports, module) {
 
 /**
@@ -2087,7 +2206,7 @@ module.exports = File;
 
 });
 
-// file: lib\common\plugin\FileEntry.js
+// file: lib/common/plugin/FileEntry.js
 define("cordova/plugin/FileEntry", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -2152,7 +2271,7 @@ module.exports = FileEntry;
 
 });
 
-// file: lib\common\plugin\FileError.js
+// file: lib/common/plugin/FileError.js
 define("cordova/plugin/FileError", function(require, exports, module) {
 
 /**
@@ -2183,7 +2302,7 @@ module.exports = FileError;
 
 });
 
-// file: lib\common\plugin\FileReader.js
+// file: lib/common/plugin/FileReader.js
 define("cordova/plugin/FileReader", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -2251,11 +2370,7 @@ function initRead(reader, file) {
     reader._error = null;
     reader._readyState = FileReader.LOADING;
 
-    if (typeof file == 'string') {
-        // Deprecated in Cordova 2.4.
-        console.warn('Using a string argument with FileReader.readAs functions is deprecated.');
-        reader._fileName = file;
-    } else if (typeof file.fullPath == 'string') {
+    if (typeof file.fullPath == 'string') {
         reader._fileName = file.fullPath;
     } else {
         reader._fileName = '';
@@ -2559,7 +2674,7 @@ module.exports = FileReader;
 
 });
 
-// file: lib\common\plugin\FileSystem.js
+// file: lib/common/plugin/FileSystem.js
 define("cordova/plugin/FileSystem", function(require, exports, module) {
 
 var DirectoryEntry = require('cordova/plugin/DirectoryEntry');
@@ -2582,7 +2697,7 @@ module.exports = FileSystem;
 
 });
 
-// file: lib\common\plugin\FileTransfer.js
+// file: lib/common/plugin/FileTransfer.js
 define("cordova/plugin/FileTransfer", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -2774,7 +2889,7 @@ module.exports = FileTransfer;
 
 });
 
-// file: lib\common\plugin\FileTransferError.js
+// file: lib/common/plugin/FileTransferError.js
 define("cordova/plugin/FileTransferError", function(require, exports, module) {
 
 /**
@@ -2798,7 +2913,7 @@ module.exports = FileTransferError;
 
 });
 
-// file: lib\common\plugin\FileUploadOptions.js
+// file: lib/common/plugin/FileUploadOptions.js
 define("cordova/plugin/FileUploadOptions", function(require, exports, module) {
 
 /**
@@ -2824,7 +2939,7 @@ module.exports = FileUploadOptions;
 
 });
 
-// file: lib\common\plugin\FileUploadResult.js
+// file: lib/common/plugin/FileUploadResult.js
 define("cordova/plugin/FileUploadResult", function(require, exports, module) {
 
 /**
@@ -2841,7 +2956,7 @@ module.exports = FileUploadResult;
 
 });
 
-// file: lib\common\plugin\FileWriter.js
+// file: lib/common/plugin/FileWriter.js
 define("cordova/plugin/FileWriter", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -2918,9 +3033,32 @@ FileWriter.prototype.abort = function() {
 /**
  * Writes data to the file
  *
- * @param text to be written
+ * @param data text or blob to be written
  */
-FileWriter.prototype.write = function(text) {
+FileWriter.prototype.write = function(data) {
+
+    var that=this;
+    var supportsBinary = (typeof window.Blob !== 'undefined' && typeof window.ArrayBuffer !== 'undefined');
+    var isBinary;
+
+    // Check to see if the incoming data is a blob
+    if (data instanceof File || (supportsBinary && data instanceof Blob)) {
+        var fileReader = new FileReader();
+        fileReader.onload = function() {
+            // Call this method again, with the arraybuffer as argument
+            FileWriter.prototype.write.call(that, this.result);
+        };
+        if (supportsBinary) {
+            fileReader.readAsArrayBuffer(data);
+        } else {
+            fileReader.readAsText(data);
+        }
+        return;
+    }
+
+    // Mark data type for safer transport over the binary bridge
+    isBinary = supportsBinary && (data instanceof ArrayBuffer);
+
     // Throw an exception if we are already writing a file
     if (this.readyState === FileWriter.WRITING) {
         throw new FileError(FileError.INVALID_STATE_ERR);
@@ -2986,7 +3124,7 @@ FileWriter.prototype.write = function(text) {
             if (typeof me.onwriteend === "function") {
                 me.onwriteend(new ProgressEvent("writeend", {"target":me}));
             }
-        }, "File", "write", [this.fileName, text, this.position]);
+        }, "File", "write", [this.fileName, data, this.position, isBinary]);
 };
 
 /**
@@ -3100,7 +3238,7 @@ module.exports = FileWriter;
 
 });
 
-// file: lib\common\plugin\Flags.js
+// file: lib/common/plugin/Flags.js
 define("cordova/plugin/Flags", function(require, exports, module) {
 
 /**
@@ -3121,7 +3259,7 @@ module.exports = Flags;
 
 });
 
-// file: lib\common\plugin\GlobalizationError.js
+// file: lib/common/plugin/GlobalizationError.js
 define("cordova/plugin/GlobalizationError", function(require, exports, module) {
 
 
@@ -3147,12 +3285,13 @@ module.exports = GlobalizationError;
 
 });
 
-// file: lib\common\plugin\InAppBrowser.js
+// file: lib/common/plugin/InAppBrowser.js
 define("cordova/plugin/InAppBrowser", function(require, exports, module) {
 
 var exec = require('cordova/exec');
 var channel = require('cordova/channel');
 var modulemapper = require('cordova/modulemapper');
+var urlutil = require('cordova/urlutil');
 
 function InAppBrowser() {
    this.channels = {
@@ -3161,6 +3300,7 @@ function InAppBrowser() {
         'loaderror' : channel.create('loaderror'),
         'exit' : channel.create('exit')
    };
+   this._alive = true;
 }
 
 InAppBrowser.prototype = {
@@ -3170,7 +3310,13 @@ InAppBrowser.prototype = {
         }
     },
     close: function (eventname) {
-        exec(null, null, "InAppBrowser", "close", []);
+        if (this._alive) {
+            this._alive = false;
+            exec(null, null, "InAppBrowser", "close", []);
+        }
+    },
+    show: function (eventname) {
+      exec(null, null, "InAppBrowser", "show", []);
     },
     addEventListener: function (eventname,f) {
         if (eventname in this.channels) {
@@ -3205,16 +3351,17 @@ InAppBrowser.prototype = {
 };
 
 module.exports = function(strUrl, strWindowName, strWindowFeatures) {
-    var iab = new InAppBrowser();
-    var cb = function(eventname) {
-       iab._eventHandler(eventname);
-    };
-
     // Don't catch calls that write to existing frames (e.g. named iframes).
     if (window.frames && window.frames[strWindowName]) {
         var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
         return origOpenFunc.apply(window, arguments);
     }
+
+    strUrl = urlutil.makeAbsolute(strUrl);
+    var iab = new InAppBrowser();
+    var cb = function(eventname) {
+       iab._eventHandler(eventname);
+    };
 
     exec(cb, cb, "InAppBrowser", "open", [strUrl, strWindowName, strWindowFeatures]);
     return iab;
@@ -3223,7 +3370,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
 
 });
 
-// file: lib\common\plugin\LocalFileSystem.js
+// file: lib/common/plugin/LocalFileSystem.js
 define("cordova/plugin/LocalFileSystem", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -3242,7 +3389,7 @@ module.exports = LocalFileSystem;
 
 });
 
-// file: lib\common\plugin\Media.js
+// file: lib/common/plugin/Media.js
 define("cordova/plugin/Media", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -3422,7 +3569,7 @@ module.exports = Media;
 
 });
 
-// file: lib\common\plugin\MediaError.js
+// file: lib/common/plugin/MediaError.js
 define("cordova/plugin/MediaError", function(require, exports, module) {
 
 /**
@@ -3462,7 +3609,7 @@ module.exports = _MediaError;
 
 });
 
-// file: lib\common\plugin\MediaFile.js
+// file: lib/common/plugin/MediaFile.js
 define("cordova/plugin/MediaFile", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -3502,7 +3649,7 @@ module.exports = MediaFile;
 
 });
 
-// file: lib\common\plugin\MediaFileData.js
+// file: lib/common/plugin/MediaFileData.js
 define("cordova/plugin/MediaFileData", function(require, exports, module) {
 
 /**
@@ -3526,7 +3673,7 @@ module.exports = MediaFileData;
 
 });
 
-// file: lib\common\plugin\Metadata.js
+// file: lib/common/plugin/Metadata.js
 define("cordova/plugin/Metadata", function(require, exports, module) {
 
 /**
@@ -3542,7 +3689,7 @@ module.exports = Metadata;
 
 });
 
-// file: lib\common\plugin\Position.js
+// file: lib/common/plugin/Position.js
 define("cordova/plugin/Position", function(require, exports, module) {
 
 var Coordinates = require('cordova/plugin/Coordinates');
@@ -3560,7 +3707,7 @@ module.exports = Position;
 
 });
 
-// file: lib\common\plugin\PositionError.js
+// file: lib/common/plugin/PositionError.js
 define("cordova/plugin/PositionError", function(require, exports, module) {
 
 /**
@@ -3583,7 +3730,7 @@ module.exports = PositionError;
 
 });
 
-// file: lib\common\plugin\ProgressEvent.js
+// file: lib/common/plugin/ProgressEvent.js
 define("cordova/plugin/ProgressEvent", function(require, exports, module) {
 
 // If ProgressEvent exists in global context, use it already, otherwise use our own polyfill
@@ -3635,7 +3782,7 @@ module.exports = ProgressEvent;
 
 });
 
-// file: lib\common\plugin\accelerometer.js
+// file: lib/common/plugin/accelerometer.js
 define("cordova/plugin/accelerometer", function(require, exports, module) {
 
 /**
@@ -3790,7 +3937,7 @@ module.exports = accelerometer;
 
 });
 
-// file: lib\common\plugin\accelerometer\symbols.js
+// file: lib/common/plugin/accelerometer/symbols.js
 define("cordova/plugin/accelerometer/symbols", function(require, exports, module) {
 
 
@@ -3801,7 +3948,7 @@ modulemapper.defaults('cordova/plugin/accelerometer', 'navigator.accelerometer')
 
 });
 
-// file: lib\common\plugin\battery.js
+// file: lib/common/plugin/battery.js
 define("cordova/plugin/battery", function(require, exports, module) {
 
 /**
@@ -3885,7 +4032,7 @@ module.exports = battery;
 
 });
 
-// file: lib\common\plugin\battery\symbols.js
+// file: lib/common/plugin/battery/symbols.js
 define("cordova/plugin/battery/symbols", function(require, exports, module) {
 
 
@@ -3895,7 +4042,7 @@ modulemapper.defaults('cordova/plugin/battery', 'navigator.battery');
 
 });
 
-// file: lib\common\plugin\camera\symbols.js
+// file: lib/common/plugin/camera/symbols.js
 define("cordova/plugin/camera/symbols", function(require, exports, module) {
 
 
@@ -3907,7 +4054,7 @@ modulemapper.defaults('cordova/plugin/CameraPopoverOptions', 'CameraPopoverOptio
 
 });
 
-// file: lib\common\plugin\capture.js
+// file: lib/common/plugin/capture.js
 define("cordova/plugin/capture", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -3985,7 +4132,7 @@ module.exports = new Capture();
 
 });
 
-// file: lib\common\plugin\capture\symbols.js
+// file: lib/common/plugin/capture/symbols.js
 define("cordova/plugin/capture/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -4001,7 +4148,7 @@ modulemapper.clobbers('cordova/plugin/capture', 'navigator.device.capture');
 
 });
 
-// file: lib\common\plugin\compass.js
+// file: lib/common/plugin/compass.js
 define("cordova/plugin/compass", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4088,7 +4235,7 @@ module.exports = compass;
 
 });
 
-// file: lib\common\plugin\compass\symbols.js
+// file: lib/common/plugin/compass/symbols.js
 define("cordova/plugin/compass/symbols", function(require, exports, module) {
 
 
@@ -4100,7 +4247,7 @@ modulemapper.clobbers('cordova/plugin/compass', 'navigator.compass');
 
 });
 
-// file: lib\common\plugin\console-via-logger.js
+// file: lib/common/plugin/console-via-logger.js
 define("cordova/plugin/console-via-logger", function(require, exports, module) {
 
 //------------------------------------------------------------------------------
@@ -4272,7 +4419,7 @@ for (var key in console) {
 
 });
 
-// file: lib\common\plugin\contacts.js
+// file: lib/common/plugin/contacts.js
 define("cordova/plugin/contacts", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4333,7 +4480,7 @@ module.exports = contacts;
 
 });
 
-// file: lib\common\plugin\contacts\symbols.js
+// file: lib/common/plugin/contacts/symbols.js
 define("cordova/plugin/contacts/symbols", function(require, exports, module) {
 
 
@@ -4350,7 +4497,7 @@ modulemapper.clobbers('cordova/plugin/ContactOrganization', 'ContactOrganization
 
 });
 
-// file: lib\common\plugin\device.js
+// file: lib/common/plugin/device.js
 define("cordova/plugin/device", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4370,7 +4517,6 @@ function Device() {
     this.available = false;
     this.platform = null;
     this.version = null;
-    this.name = null;
     this.uuid = null;
     this.cordova = null;
     this.model = null;
@@ -4386,7 +4532,6 @@ function Device() {
             me.available = true;
             me.platform = info.platform;
             me.version = info.version;
-            me.name = info.name;
             me.uuid = info.uuid;
             me.cordova = buildLabel;
             me.model = info.model;
@@ -4413,7 +4558,7 @@ module.exports = new Device();
 
 });
 
-// file: lib\common\plugin\device\symbols.js
+// file: lib/common/plugin/device/symbols.js
 define("cordova/plugin/device/symbols", function(require, exports, module) {
 
 
@@ -4423,7 +4568,7 @@ modulemapper.clobbers('cordova/plugin/device', 'device');
 
 });
 
-// file: lib\common\plugin\echo.js
+// file: lib/common/plugin/echo.js
 define("cordova/plugin/echo", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -4461,7 +4606,7 @@ module.exports = function(successCallback, errorCallback, message, forceAsync) {
 
 });
 
-// file: lib\common\plugin\file\symbols.js
+// file: lib/webos/plugin/file/symbols.js
 define("cordova/plugin/file/symbols", function(require, exports, module) {
 
 
@@ -4469,10 +4614,12 @@ var modulemapper = require('cordova/modulemapper'),
     symbolshelper = require('cordova/plugin/file/symbolshelper');
 
 symbolshelper(modulemapper.defaults);
+modulemapper.clobbers('cordova/plugin/webos/requestfilesystem', 'requestFileSystem');
+modulemapper.clobbers('cordova/plugin/webos/filereader', 'FileReader');
 
 });
 
-// file: lib\common\plugin\file\symbolshelper.js
+// file: lib/common/plugin/file/symbolshelper.js
 define("cordova/plugin/file/symbolshelper", function(require, exports, module) {
 
 module.exports = function(exportFunc) {
@@ -4497,7 +4644,7 @@ module.exports = function(exportFunc) {
 
 });
 
-// file: lib\common\plugin\filetransfer\symbols.js
+// file: lib/common/plugin/filetransfer/symbols.js
 define("cordova/plugin/filetransfer/symbols", function(require, exports, module) {
 
 
@@ -4508,7 +4655,7 @@ modulemapper.clobbers('cordova/plugin/FileTransferError', 'FileTransferError');
 
 });
 
-// file: lib\common\plugin\geolocation.js
+// file: lib/common/plugin/geolocation.js
 define("cordova/plugin/geolocation", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4704,7 +4851,7 @@ module.exports = geolocation;
 
 });
 
-// file: lib\common\plugin\geolocation\symbols.js
+// file: lib/common/plugin/geolocation/symbols.js
 define("cordova/plugin/geolocation/symbols", function(require, exports, module) {
 
 
@@ -4717,7 +4864,7 @@ modulemapper.clobbers('cordova/plugin/Coordinates', 'Coordinates');
 
 });
 
-// file: lib\common\plugin\globalization.js
+// file: lib/common/plugin/globalization.js
 define("cordova/plugin/globalization", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5093,7 +5240,7 @@ module.exports = globalization;
 
 });
 
-// file: lib\common\plugin\globalization\symbols.js
+// file: lib/common/plugin/globalization/symbols.js
 define("cordova/plugin/globalization/symbols", function(require, exports, module) {
 
 
@@ -5104,7 +5251,17 @@ modulemapper.clobbers('cordova/plugin/GlobalizationError', 'GlobalizationError')
 
 });
 
-// file: lib\common\plugin\logger.js
+// file: lib/webos/plugin/inappbrowser/symbols.js
+define("cordova/plugin/inappbrowser/symbols", function(require, exports, module) {
+
+
+var modulemapper = require('cordova/modulemapper');
+
+modulemapper.clobbers('cordova/plugin/webos/inappbrowser', 'open');
+
+});
+
+// file: lib/common/plugin/logger.js
 define("cordova/plugin/logger", function(require, exports, module) {
 
 //------------------------------------------------------------------------------
@@ -5434,7 +5591,7 @@ document.addEventListener("deviceready", logger.__onDeviceReady, false);
 
 });
 
-// file: lib\common\plugin\logger\symbols.js
+// file: lib/common/plugin/logger/symbols.js
 define("cordova/plugin/logger/symbols", function(require, exports, module) {
 
 
@@ -5444,7 +5601,7 @@ modulemapper.clobbers('cordova/plugin/logger', 'cordova.logger');
 
 });
 
-// file: lib\common\plugin\media\symbols.js
+// file: lib/common/plugin/media/symbols.js
 define("cordova/plugin/media/symbols", function(require, exports, module) {
 
 
@@ -5455,7 +5612,7 @@ modulemapper.defaults('cordova/plugin/MediaError', 'MediaError');
 
 });
 
-// file: lib\common\plugin\network.js
+// file: lib/common/plugin/network.js
 define("cordova/plugin/network", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -5527,7 +5684,7 @@ module.exports = me;
 
 });
 
-// file: lib\common\plugin\networkstatus\symbols.js
+// file: lib/common/plugin/networkstatus/symbols.js
 define("cordova/plugin/networkstatus/symbols", function(require, exports, module) {
 
 
@@ -5539,7 +5696,7 @@ modulemapper.defaults('cordova/plugin/Connection', 'Connection');
 
 });
 
-// file: lib\common\plugin\notification.js
+// file: lib/common/plugin/notification.js
 define("cordova/plugin/notification", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -5642,7 +5799,7 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\notification\symbols.js
+// file: lib/common/plugin/notification/symbols.js
 define("cordova/plugin/notification/symbols", function(require, exports, module) {
 
 
@@ -5652,7 +5809,7 @@ modulemapper.defaults('cordova/plugin/notification', 'navigator.notification');
 
 });
 
-// file: lib\common\plugin\requestFileSystem.js
+// file: lib/common/plugin/requestFileSystem.js
 define("cordova/plugin/requestFileSystem", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5698,7 +5855,7 @@ module.exports = requestFileSystem;
 
 });
 
-// file: lib\common\plugin\resolveLocalFileSystemURI.js
+// file: lib/common/plugin/resolveLocalFileSystemURI.js
 define("cordova/plugin/resolveLocalFileSystemURI", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5747,7 +5904,7 @@ module.exports = function(uri, successCallback, errorCallback) {
 
 });
 
-// file: lib\common\plugin\splashscreen.js
+// file: lib/common/plugin/splashscreen.js
 define("cordova/plugin/splashscreen", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -5765,7 +5922,7 @@ module.exports = splashscreen;
 
 });
 
-// file: lib\common\plugin\splashscreen\symbols.js
+// file: lib/common/plugin/splashscreen/symbols.js
 define("cordova/plugin/splashscreen/symbols", function(require, exports, module) {
 
 
@@ -5775,7 +5932,939 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 
 });
 
-// file: lib\common\symbols.js
+// file: lib/webos/plugin/webos/accelerometer.js
+define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
+
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var callback;
+var failureTimer;
+var clearTimer = function() {
+    if(failureTimer!=undefined) {
+        window.clearTimeout(failureTimer);
+        failureTimer = undefined;
+    }
+};
+
+module.exports = {
+    start: function(onSuccess, onFailure) {
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({
+                    x: event.accelerationIncludingGravity.x,
+                    y: event.accelerationIncludingGravity.y,
+                    z: event.accelerationIncludingGravity.z
+                });
+            };
+            window.addEventListener("devicemotion", callback);
+        } else { // Legacy support for TouchPad and Pre3
+            document.removeEventListener("acceleration", callback);
+            callback = function(event) {
+                clearTimer();
+                onSuccess({x:(event.accelX*-9.81), y:(event.accelY*-9.81), z:(event.accelZ*-9.81)});
+            };
+            document.addEventListener("acceleration", callback);
+        }
+        failureTimer = window.setTimeout(function() {
+            clearTimer();
+            onFailure({code:1, message:"Accelerometer not available"});
+        }, 5000);
+    },
+    stop: function(onSuccess, onFailure) {
+        clearTimer();
+        if (!isLegacy) {
+            window.removeEventListener("devicemotion", callback);
+        } else {
+            document.removeEventListener("acceleration", callback);
+        }
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/camera.js
+define("cordova/plugin/webos/camera", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+
+module.exports = {
+    takePicture: function(successCallback, errorCallback, options) {
+        var filename = (options || {}).filename | "";
+
+        service.request(service.protocol + service.systemPrefix + '.applicationManager', {
+            method: 'launch',
+            parameters: {
+            id: 'com.palm.app.camera',
+            params: {
+                    appId: 'com.palm.app.camera',
+                    name: 'capture',
+                    sublaunch: true,
+                    filename: filename
+                }
+            },
+            onSuccess: successCallback,
+            onFailure: errorCallback
+        });
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/compass.js
+define("cordova/plugin/webos/compass", function(require, exports, module) {
+
+var CompassError = require('cordova/plugin/CompassError');
+
+module.exports = {
+    getHeading: function(onSuccess, onFailure) {
+        // only TouchPad and Pre3 have a Compass/Gyro
+        if(window.device.name !== "TouchPad" && window.device.name !== "Pre3" && onFailure) {
+            onFailure(CompassError.COMPASS_NOT_SUPPORTED);
+        } else {
+            var onReadingChanged = function (e) {
+                document.removeEventListener("compass", onReadingChanged);
+                var diff = Math.min(Math.abs(e.trueHeading-e.magHeading), Math.abs((e.trueHeading+360)-e.magHeading),
+                        Math.abs(e.trueHeading-(e.magHeading+360)));
+                onSuccess({magneticHeading: e.magHeading, trueHeading:e.trueHeading, headingAccuracy:diff,
+                        timestamp:new Date().getTime()});
+            };
+            document.addEventListener("compass", onReadingChanged);
+        }
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/device.js
+define("cordova/plugin/webos/device", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+
+module.exports = {
+    getDeviceInfo: function(successCallback, failureCallback) {
+        var deviceInfo = undefined;
+        try {
+            deviceInfo = JSON.parse(PalmSystem.deviceInfo);
+        } catch(e) {
+            failureCallback(e)
+        }
+        service.request('luna://com.palm.preferences/systemProperties', {
+            method:"Get",
+            parameters:{"key": "com.palm.properties.nduid"},
+            onSuccess: function(result) {
+                successCallback({
+                    name: deviceInfo.modelNameAscii || deviceInfo.modelName,
+                    model: deviceInfo.modelNameAscii || deviceInfo.modelName,
+                    version: deviceInfo.platformVersion,
+                    platform: "webOS",
+                    cordova: "2.9.1",
+                    uuid: result["com.palm.properties.nduid"]
+                });
+            },
+            onFailure: function(err) {
+                successCallback({
+                    name: deviceInfo.modelNameAscii || deviceInfo.modelName,
+                    model: deviceInfo.modelNameAscii || deviceInfo.modelName,
+                    version: deviceInfo.platformVersion,
+                    platform: "webOS",
+                    cordova: "2.9.1",
+                    uuid: ""
+                });
+            }
+        });
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/file.js
+define("cordova/plugin/webos/file", function(require, exports, module) {
+
+/**
+ * Constructor.
+ * name {DOMString} name of the file, without path information
+ * fullPath {DOMString} the full path of the file, including the name
+ * type {DOMString} mime type
+ * lastModifiedDate {Date} last modified date
+ * size {Number} size of the file in bytes
+ */
+
+var File = function(name, fullPath, type, lastModifiedDate, size){
+    this.name = name || '';
+    this.fullPath = fullPath || null;
+    this.type = type || null;
+    this.lastModifiedDate = lastModifiedDate || null;
+    this.size = size || 0;
+};
+
+module.exports = File;
+
+});
+
+// file: lib/webos/plugin/webos/filereader.js
+define("cordova/plugin/webos/filereader", function(require, exports, module) {
+
+var FileError = require('cordova/plugin/FileError'),
+    ProgressEvent = require('cordova/plugin/ProgressEvent');
+
+var FileReader = function() {
+    this.fileName = "";
+
+    this.readyState = 0; // FileReader.EMPTY
+
+    // File data
+    this.result = null;
+
+    // Error
+    this.error = null;
+
+    // Event handlers
+    this.onloadstart = null;    // When the read starts.
+    this.onprogress = null;     // While reading (and decoding) file or fileBlob data, and reporting partial file data (progess.loaded/progress.total)
+    this.onload = null;         // When the read has successfully completed.
+    this.onerror = null;        // When the read has failed (see errors).
+    this.onloadend = null;      // When the request has completed (either in success or failure).
+    this.onabort = null;        // When the read has been aborted. For instance, by invoking the abort() method.
+};
+
+FileReader.prototype.readAsText = function(file, encoding) {
+    //webOS has no file i/o yet, so we use an xhr. very limited
+
+    // Already loading something
+    if (this.readyState == FileReader.LOADING) {
+        throw new FileError(FileError.INVALID_STATE_ERR);
+    }
+
+    // LOADING state
+    this.readyState = FileReader.LOADING;
+
+    // If loadstart callback
+    if (typeof this.onloadstart === "function") {
+        this.onloadstart(new ProgressEvent("loadstart", {target:this}));
+    }
+
+    // Default encoding is UTF-8
+    var enc = encoding ? encoding : "UTF-8";
+
+    var me = this;
+
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4) {
+            if (xhr.status == 200 && xhr.responseText) {
+                // Save result
+                me.result = xhr.responseText;
+
+                // If onload callback
+                if (typeof me.onload === "function") {
+                    me.onload(new ProgressEvent("load", {target:me}));
+                }
+
+                // DONE state
+                me.readyState = FileReader.DONE;
+
+                // If onloadend callback
+                if (typeof me.onloadend === "function") {
+                    me.onloadend(new ProgressEvent("loadend", {target:me}));
+                }
+
+            } else {
+                // If DONE (cancelled), then don't do anything
+                if (me.readyState === FileReader.DONE) {
+                    return;
+                }
+
+                // DONE state
+                me.readyState = FileReader.DONE;
+
+                me.result = null;
+
+                // Save error
+                me.error = new FileError(FileError.NOT_FOUND_ERR);
+
+                // If onerror callback
+                if (typeof me.onerror === "function") {
+                    me.onerror(new ProgressEvent("error", {target:me}));
+                }
+
+                // If onloadend callback
+                if (typeof me.onloadend === "function") {
+                    me.onloadend(new ProgressEvent("loadend", {target:me}));
+                }
+            }
+            xhr = null;
+        }
+    };
+    xhr.open("GET", file, true);
+    xhr.send();
+};
+
+module.exports = FileReader;
+
+});
+
+// file: lib/webos/plugin/webos/geolocation.js
+define("cordova/plugin/webos/geolocation", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+var errorText = [
+    "Geolocation not available",
+    "Success",
+    "Timeout",
+    "Position currently unavailable",
+    "Unknown geolocation error",
+    "No GPS fix, relying on cell/wifi",
+    "No location source; both Google services and GPS are off",
+    "Permission denied",
+    "Application already has a pending message",
+    "Application has been temporarily blacklisted"
+];
+
+module.exports = {
+    //store request handles to avoid garbage collection issues with long requests
+    requests: [],
+    watched: {},
+    getLocation: function(successCallback, failureCallback, options) {
+        var request = this.requests[requests.length] = service.request('luna://com.palm.location', {
+            method: "getCurrentPosition",
+            parameters: {
+                accuracy: ((options[0]==true) ? 1 : 2),
+                maximumAge: options[1]
+            },
+            onSuccess: function(inResponse) {
+                var position = {
+                    latitude: inResponse.latitude,
+                    longitude: inResponse.longitude,
+                    altitude: (inResponse.altitude >= 0 ? inResponse.altitude: null),
+                    velocity: (inResponse.velocity >= 0 ? inResponse.velocity: null),
+                    heading: (inResponse.heading >= 0 ? inResponse.heading: null),
+                    accuracy: (inResponse.horizAccuracy >= 0 ? inResponse.horizAccuracy: null),
+                    altitudeAccuracy: (inResponse.vertAccuracy >= 0 ? inResponse.vertAccuracy: null)
+                };
+                successCallback(position);
+                var index = this.requests.indexOf(request);
+                if(index >-1) {
+                    this.requests.splice(i, 1);
+                }
+            },
+            onFailure: function(inError) {
+                var code = inError.errorCode || -1;
+                failureCallback({code:code, message:errorText[code+1] || "Unknown GPS error"});
+                var index = this.requests.indexOf(request);
+                if(index >-1) {
+                    this.requests.splice(i, 1);
+                }
+            }
+        });
+    },
+    addWatch: function(successCallback, failureCallback, options) {
+        this.watched[options[0]] = service.request('luna://com.palm.location', {
+            method: "startTracking",
+            parameters: {
+                accuracy: ((options[1]==true) ? 1 : 2),
+                subscribe: true
+            },
+            onSuccess: function(inResponse) {
+                if(inResponse.latitude!=undefined && inResponse.longitude!=undefined) {
+                    var position = {
+                        latitude: inResponse.latitude,
+                        longitude: inResponse.longitude,
+                        altitude: (inResponse.altitude >= 0 ? inResponse.altitude: null),
+                        velocity: (inResponse.velocity >= 0 ? inResponse.velocity: null),
+                        heading: (inResponse.heading >= 0 ? inResponse.heading: null),
+                        accuracy: (inResponse.horizAccuracy >= 0 ? inResponse.horizAccuracy: null),
+                        altitudeAccuracy: (inResponse.vertAccuracy >= 0 ? inResponse.vertAccuracy: null),
+                        timestamp: new Date().getTime()
+                    };
+                    successCallback(position);
+                }
+            },
+            onFailure: function(inError) {
+                var code = inError.errorCode || -1;
+                failureCallback({code:code, message:errorText[code+1] || "Unknown GPS error"});
+            },
+            subscribe: true
+        });
+    },
+    clearWatch: function(successCallback, failureCallback, options) {
+        if(this.watched[options[0]]) {
+            this.watched[options[0]].cancel();
+            delete this.watched[options[0]];
+        }
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/globalization.js
+define("cordova/plugin/webos/globalization", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+
+module.exports = {
+    getPreferredLanguage: function(successCallback, errorCallback) {
+        // get a languageCode (e.g. en)
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var languageCode = inResponse.locale.languageCode;
+                // get a languageName (e.g. English) from the languageCode
+                service.request('luna://com.palm.systemservice', {
+                    method: 'getPreferenceValues',
+                    parameters: {
+                        'key': 'locale'
+                    },
+                    onSuccess: function(inResponse) {
+                        var locale = inResponse.locale;
+                        for (var i = 0, max = locale.length; i < max; i++) {
+                            if (locale[i].languageCode == languageCode) {
+                                successCallback(locale[i].languageName);
+                            }
+                        }
+                    },
+                    // return a languageCode when a request fails
+                    onFailure: function(inError) {
+                        successCallback(languageCode);
+                    }
+                });
+            },
+            onFailure: errorCallback
+        });
+    },
+    getLocaleName: function(successCallback, errorCallback) {
+        service.request('luna://com.palm.systemservice', {
+            method: 'getPreferences',
+            parameters: {
+                'keys': ['locale']
+            },
+            onSuccess: function(inResponse) {
+                var locale = inResponse.locale.languageCode + "_" + inResponse.locale.countryCode.toLocaleUpperCase();
+                successCallback(locale);
+            },
+            onFailure: errorCallback
+        });
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/inappbrowser.js
+define("cordova/plugin/webos/inappbrowser", function(require, exports, module) {
+
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var channel = require('cordova/channel');
+var modulemapper = require('cordova/modulemapper');
+var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
+var fireWindowEvent = function(win, data) {
+    var event = document.createEvent('Events');
+    event.initEvent(data.type, false, false);
+    for(var x in data) {
+        event[x] = data[x];
+    }
+    win.dispatchEvent(event);
+};
+
+module.exports = function(strUrl, strWindowName, strWindowFeatures) {
+    if(!strUrl && !isLegacy) {
+        strUrl = "about:blank";
+    }
+    var child = origOpenFunc.apply(window, arguments);
+
+    if(child) {
+        if(child.PalmSystem && isLegacy) {
+            child.PalmSystem.stageReady();
+        }
+        //window has been created, so fire "loadstart" immediately
+        fireWindowEvent(child, {type:"loadstart", url:child.location.href});
+
+        var loaded = false;
+
+        //fire "loadstop" when loading finishes
+        child.addEventListener("load", function(e) {
+            if(!loaded) {
+                fireWindowEvent(child, {type:"loadstop", url:child.location.href});
+                loaded = true;
+            }
+        });
+        if(!strUrl || strUrl.length==0 || strUrl==="about:blank") {
+            setTimeout(function() {
+                fireWindowEvent(child, {type:"loadstop", url:""});
+                loaded = true;
+            }, 0);
+        }
+
+        //fire "loaderror" when an error occurs or the user aborts loading
+        child.addEventListener("error", function(e) {
+            fireWindowEvent(child, {type:"loaderror", url:child.location.href,
+                    code:(e.lineno || 1), message:(e.message || "Error loading page")});
+            loaded = true;
+        });
+        child.addEventListener("abort", function(e) {
+            fireWindowEvent(child, {type:"loaderror", url:child.location.href,
+                    code:2, message:"Page load aborted"});
+            loaded = true;
+        });
+
+        child.addEventListener("unload", function(e) {
+            if(loaded) {
+                fireWindowEvent(child, {type:"exit", url:child.location.href});
+            }
+        });
+
+        child.show = function() {
+            if(child.PalmSystem && child.PalmSystem.activate)
+                child.PalmSystem.activate();
+        };
+
+        child.executeScript = function(injectDetails, callback) {
+            if(injectDetails.code) {
+                var result = child.eval(injectDetails.code);
+                callback(result);
+            } else if (injectDetails.file) {
+                if(child.document.readyState === "interactive" || child.document.readyState === "complete" ||
+                        child.document.readyState === "loaded") {
+                    var script = child.document.createElement('script');
+                    script.src = injectDetails.file;
+                    script.onload = callback;
+                    script.onerror = callback;
+                    script.charset = "utf-8";
+                    child.document.getElementsByTagName('head')[0].appendChild(script);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<scri' + 'pt src="' + injectDetails.file + '"' +
+                            (onLoad ? ' onload="' + callback + '"' : '') +
+                            (onError ? ' onerror="' + callback + '"' : '') +
+                            '></scri' + 'pt>');
+                    /* jshint evil: false */
+                }
+            } else {
+                throw new Error('executeScript requires exactly one of code or file to be specified');
+            }
+        };
+
+        child.insertCSS = function(injectDetails, callback) {
+            var ready = (child.document.readyState === "interactive" || child.document.readyState === "complete" ||
+                        child.document.readyState === "loaded");
+            if(injectDetails.code) {
+                if(ready) {
+                    var style = child.document.createElement('style');
+                    style.media = "screen";
+                    style.type = "text/css";
+                    style.appendChild(document.createTextNode(injectDetails.code));
+                    child.document.getElementsByTagName('head')[0].appendChild(style);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<style media="screen" type="text/css" >' +
+                            injectDetails.code + '</style>');
+                    /* jshint evil: false */
+                }
+            } else if(injectDetails.file) {
+                if(ready) {
+                    var link = child.document.createElement('link');
+                    link.href = inPath;
+                    link.media = "screen";
+                    link.rel = "stylesheet";
+                    link.type = "text/css";
+                    child.document.getElementsByTagName('head')[0].appendChild(link);
+                } else {
+                    /* jshint evil: true */
+                    child.document.write(
+                            '<link href="' + inPath + '" media="screen" rel="' +
+                            'stylesheet" type="text/css" />');
+                    /* jshint evil: false */
+                }
+            } else {
+                throw new Error('insertCSS requires exactly one of code or file to be specified');
+            }
+        }
+    }
+
+    return child;
+};
+
+
+});
+
+// file: lib/webos/plugin/webos/network.js
+define("cordova/plugin/webos/network", function(require, exports, module) {
+
+var service = require('cordova/plugin/webos/service');
+var Connection = require('cordova/plugin/Connection');
+
+//connection monitor
+navigator.connectionMonitor = navigator.connectionMonitor || {};
+navigator.connectionMonitor.start = function(onSuccess, onFailure) {
+    onSuccess = this.onSuccess = onSuccess || this.onSuccess;
+    this.onFailure = onFailure || this.onFailure;
+    if(!navigator.connectionMonitor.request) {
+        navigator.connectionMonitor.request = service.request('luna://com.palm.connectionmanager', {
+            method: 'getstatus',
+            parameters: { subscribe: true },
+            onSuccess: function(result) {
+                var type = Connection.UNKNOWN;
+                if(!result.isInternetConnectionAvailable) { type = Connection.NONE; }
+                if(result.wan && result.wan.state==="connected") { type = Connection.CELL; }
+                if(result.wifi && result.wifi.onInternet) { type = Connection.WIFI; }
+                if(result.wired && result.wired.onInternet) { type = Connection.ETHERNET; }
+
+                //check for connection type change to avoid duplicate online/offline events
+                if(type != navigator.connection.type) {
+                    onSuccess(type);
+                }
+            },
+            onFailure: this.onFailure,
+            subscribe: true,
+            resubscribe: true
+        });
+    }
+};
+navigator.connectionMonitor.stop = function() {
+    if(navigator.connectionMonitor.request) {
+        navigator.connectionMonitor.request.cancel();
+        navigator.connectionMonitor.request = undefined;
+    }
+};
+
+module.exports = {
+    /**
+     * Get connection info
+     *
+     * @param {Function} successCallback The function to call when the Connection data is available
+     * @param {Function} errorCallback The function to call when there is an error getting the Connection data. (OPTIONAL)
+     */
+    getConnectionInfo: function (successCallback, failureCallback) {
+        navigator.connectionMonitor.start(successCallback, failureCallback);
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/notification.js
+define("cordova/plugin/webos/notification", function(require, exports, module) {
+
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var legacyAlert = function(callback, args) {
+    var modulemapper = require('cordova/modulemapper');
+    var origOpen = modulemapper.getOriginalSymbol(window, 'open');
+    var callbackName = "popupAlert" + new Date().getTime();
+    window[callbackName] = function() {
+        if(callback) {
+            callback();
+        }
+        delete window[callbackName];
+    };
+    var html='<html><head><style>body {color:white;' + ((isLegacy && window.device.version.indexOf("3.")<0) ? "background-color: #000000;" : "") + '-webkit-user-select: none;} .notification-button {position:absolute;bottom:6px;left:15%;right:15%;font-size: 16px;text-align: center;white-space: nowrap;padding: 6px 18px;overflow: hidden;border-radius: 3px;border: 1px solid #707070;border: 1px solid rgba(15, 15, 15, 0.5);box-shadow: inset 0px 1px 0px rgba(255, 255, 255, 0.2);color: white;background-color: rgba(160,160,160,0.35););background-size: contain;text-overflow: ellipsis;} .notification-button:active:hover {background-position: top;border-top: 1px solid rgba(15, 15, 15, 0.6);box-shadow: inset 0px 1px 0px rgba(0, 0, 0, 0.1);bottom:5px;background:rgba(160,160,160,0.2);}</style><script>setTimeout(function(){document.addEventListener("keydown", function(e){if(e.keyCode==27) {e.preventDefault(); window.onbeforeunload(); return true;}}, true);document.getElementById("b1").addEventListener("click",function(f){window.close();},false); window.onbeforeunload=function(){window.opener.' + callbackName + '();};},200);</script></head><body><h2>' + args[1] + '</h2>' + args[0] + '<br/><br/><div id="b1" class="notification-button">' + args[2] + '</div></body></html>';
+    var child = origOpen(undefined, "PopupAlert", "height=150, attributes={\"window\":\"popupalert\"}");
+    child.document.write(html);
+    if(child.PalmSystem) {
+        child.PalmSystem.stageReady();
+    }
+};
+
+module.exports = {
+    alert: function(onSuccess, onFailure, args) {
+        if(isLegacy) {
+            legacyAlert(onSuccess, args);
+        } else {
+            window.alert(args[0]);
+            onSuccess();
+        }
+    },
+    confirm: function(onSuccess, onFailure, args) {
+        if(isLegacy) {
+            console.error("Cordova navigator.notification.confirm not supported");
+        } else {
+            var result = window.confirm(args[0]);
+            onSuccess(1+(!result));
+        }
+    },
+    prompt: function(onSuccess, onFailure, args) {
+        if(isLegacy) {
+            console.error("Cordova navigator.notification.prompt not supported");
+        } else {
+            var result = window.prompt(args[0], args[3]);
+            onSuccess({buttonIndex: ((result==undefined) ? 2 : 1), input1:result || ""});
+        }
+    },
+    vibrate: function(onSuccess, onFailure, args) {
+        if(window.PalmSystem && window.PalmSystem.identifier.split(" ")[0].indexOf("com.palm.app.")==0) {
+            var service = require('cordova/plugin/webos/service');
+            this.vibRequest = service.request("luna://com.palm.vibrate", {
+                method: 'vibrate',
+                parameters: {
+                    period: 0,
+                    duration: args[0]
+                },
+                onFailure: function(inError) {
+                    PalmSystem.playSoundNotification('vibrate');
+                }
+            });
+        } else if(window.PalmSystem) {
+            PalmSystem.playSoundNotification('vibrate');
+        }
+    },
+    beep: function(onSuccess, onFailure, args) {
+        if(window.PalmSystem) {
+            PalmSystem.playSoundNotification('alerts');
+        }
+    }
+};
+
+});
+
+// file: lib/webos/plugin/webos/requestfilesystem.js
+define("cordova/plugin/webos/requestfilesystem", function(require, exports, module) {
+
+module.exports = function(type,size,successCallback,errorCallback) {
+    var theFileSystem={};
+    theFileSystem.name="webOS";
+    theFileSystem.root={};
+    theFileSystem.root.name="Root";
+
+    theFileSystem.root.getFile=function(filename,options,successCallback,errorCallback) {
+        if (options.create) { errorCallback(); }
+        var theFile=filename;
+        successCallback(theFile);
+    };
+
+    successCallback(theFileSystem);
+};
+
+});
+
+// file: lib/webos/plugin/webos/service.js
+define("cordova/plugin/webos/service", function(require, exports, module) {
+
+var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+
+function LS2Request(uri, params) {
+    this.uri = uri;
+    params = params || {};
+    if(params.method) {
+        if(this.uri.charAt(this.uri.length-1) != "/") {
+            this.uri += "/";
+        }
+        this.uri += params.method;
+    }
+    if(typeof params.onSuccess === 'function') {
+        this.onSuccess = params.onSuccess;
+    }
+    if(typeof params.onFailure === 'function') {
+    this.onFailure = params.onFailure;
+    }
+    if(typeof params.onComplete === 'function') {
+    this.onComplete = params.onComplete;
+    }
+    this.params = (typeof params.parameters === 'object') ? params.parameters : {};
+    this.subscribe = params.subscribe || false;
+    if(this.subscribe) {
+        this.params.subscribe = params.subscribe;
+    }
+    if(this.params.subscribe) {
+        this.subscribe = this.params.subscribe;
+    }
+    this.resubscribe = params.resubscribe || false;
+    this.send();
+}
+
+LS2Request.prototype.send = function() {
+    if(!window.PalmServiceBridge) {
+        console.error("PalmServiceBridge not found.");
+        return;
+    }
+    this.bridge = new PalmServiceBridge();
+    var self = this;
+    this.bridge.onservicecallback = this.callback = function(msg) {
+        var parsedMsg;
+        if(self.cancelled) {
+            return;
+        }
+        try {
+            parsedMsg = JSON.parse(msg);
+        } catch(e) {
+            parsedMsg = {
+                errorCode: -1,
+                errorText: msg
+            };
+        }
+        if((parsedMsg.errorCode || parsedMsg.returnValue==false) && self.onFailure) {
+            self.onFailure(parsedMsg);
+            if(self.resubscribe && self.subscribe) {
+                self.delayID = setTimeout(function() {
+                    self.send();
+                }, LS2Request.resubscribeDelay);
+            }
+        } else if(self.onSuccess) {
+            self.onSuccess(parsedMsg);
+        }
+        if(self.onComplete) {
+            self.onComplete(parsedMsg);
+        }
+        if(!self.subscribe) {
+            self.cancel();
+        }
+    };
+    this.bridge.call(this.uri, JSON.stringify(this.params));
+};
+
+LS2Request.prototype.cancel = function() {
+    this.cancelled = true;
+    if(this.resubscribeJob) {
+            clearTimeout(this.delayID)
+        }
+        if(this.bridge) {
+            this.bridge.cancel();
+            this.bridge = undefined;
+        }
+};
+
+LS2Request.prototype.toString = function() {
+    return "[LS2Request]";
+};
+
+LS2Request.resubscribeDelay = 10000;
+
+module.exports = {
+    request: function (uri, params) {
+        var req = new LS2Request(uri, params);
+        return req;
+    },
+    systemPrefix: ((isLegacy) ? "com.palm" : "com.webos"),
+    protocol: "luna://"
+};
+//temporary fallback for previous syntax
+module.exports.Request = module.exports.request;
+
+});
+
+// file: lib/common/pluginloader.js
+define("cordova/pluginloader", function(require, exports, module) {
+
+var channel = require('cordova/channel');
+var modulemapper = require('cordova/modulemapper');
+
+// Helper function to inject a <script> tag.
+function injectScript(url, onload, onerror) {
+    var script = document.createElement("script");
+    // onload fires even when script fails loads with an error.
+    script.onload = onload;
+    script.onerror = onerror || onload;
+    script.src = url;
+    document.head.appendChild(script);
+}
+
+function onScriptLoadingComplete(moduleList) {
+    // Loop through all the plugins and then through their clobbers and merges.
+    for (var i = 0, module; module = moduleList[i]; i++) {
+        if (module) {
+            try {
+                if (module.clobbers && module.clobbers.length) {
+                    for (var j = 0; j < module.clobbers.length; j++) {
+                        modulemapper.clobbers(module.id, module.clobbers[j]);
+                    }
+                }
+
+                if (module.merges && module.merges.length) {
+                    for (var k = 0; k < module.merges.length; k++) {
+                        modulemapper.merges(module.id, module.merges[k]);
+                    }
+                }
+
+                // Finally, if runs is truthy we want to simply require() the module.
+                // This can be skipped if it had any merges or clobbers, though,
+                // since the mapper will already have required the module.
+                if (module.runs && !(module.clobbers && module.clobbers.length) && !(module.merges && module.merges.length)) {
+                    modulemapper.runs(module.id);
+                }
+            }
+            catch(err) {
+                // error with module, most likely clobbers, should we continue?
+            }
+        }
+    }
+
+    finishPluginLoading();
+}
+
+// Called when:
+// * There are plugins defined and all plugins are finished loading.
+// * There are no plugins to load.
+function finishPluginLoading() {
+    channel.onPluginsReady.fire();
+}
+
+// Handler for the cordova_plugins.js content.
+// See plugman's plugin_loader.js for the details of this object.
+// This function is only called if the really is a plugins array that isn't empty.
+// Otherwise the onerror response handler will just call finishPluginLoading().
+function handlePluginsObject(path, moduleList) {
+    // Now inject the scripts.
+    var scriptCounter = moduleList.length;
+
+    if (!scriptCounter) {
+        finishPluginLoading();
+        return;
+    }
+    function scriptLoadedCallback() {
+        if (!--scriptCounter) {
+            onScriptLoadingComplete(moduleList);
+        }
+    }
+
+    for (var i = 0; i < moduleList.length; i++) {
+        injectScript(path + moduleList[i].file, scriptLoadedCallback);
+    }
+}
+
+function injectPluginScript(pathPrefix) {
+    injectScript(pathPrefix + 'cordova_plugins.js', function(){
+        try {
+            var moduleList = require("cordova/plugin_list");
+            handlePluginsObject(pathPrefix, moduleList);
+        } catch (e) {
+            // Error loading cordova_plugins.js, file not found or something
+            // this is an acceptable error, pre-3.0.0, so we just move on.
+            finishPluginLoading();
+        }
+    },finishPluginLoading); // also, add script load error handler for file not found
+}
+
+function findCordovaPath() {
+    var path = null;
+    var scripts = document.getElementsByTagName('script');
+    var term = 'cordova.js';
+    for (var n = scripts.length-1; n>-1; n--) {
+        var src = scripts[n].src;
+        if (src.indexOf(term) == (src.length - term.length)) {
+            path = src.substring(0, src.length - term.length);
+            break;
+        }
+    }
+    return path;
+}
+
+// Tries to load all plugins' js-modules.
+// This is an async process, but onDeviceReady is blocked on onPluginsReady.
+// onPluginsReady is fired when there are no plugins to load, or they are all done.
+exports.load = function() {
+    var pathPrefix = findCordovaPath();
+    if (pathPrefix === null) {
+        console.log('Could not find cordova.js script tag. Plugin loading may fail.');
+        pathPrefix = '';
+    }
+    injectPluginScript(pathPrefix);
+};
+
+
+});
+
+// file: lib/common/symbols.js
 define("cordova/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -5788,7 +6877,24 @@ modulemapper.clobbers('cordova/exec', 'Cordova.exec');
 
 });
 
-// file: lib\common\utils.js
+// file: lib/common/urlutil.js
+define("cordova/urlutil", function(require, exports, module) {
+
+var urlutil = exports;
+var anchorEl = document.createElement('a');
+
+/**
+ * For already absolute URLs, returns what is passed in.
+ * For relative URLs, converts them to absolute ones.
+ */
+urlutil.makeAbsolute = function(url) {
+  anchorEl.href = url;
+  return anchorEl.href;
+};
+
+});
+
+// file: lib/common/utils.js
 define("cordova/utils", function(require, exports, module) {
 
 var utils = exports;
@@ -5959,10 +7065,17 @@ function UUIDcreatePart(length) {
 });
 
 window.cordova = require('cordova');
-// file: lib\scripts\bootstrap.js
+// file: lib/scripts/bootstrap.js
 
 (function (context) {
+    if (context._cordovaJsLoaded) {
+        throw new Error('cordova.js included multiple times.');
+    }
+    context._cordovaJsLoaded = true;
+
     var channel = require('cordova/channel');
+    var pluginloader = require('cordova/pluginloader');
+
     var platformInitChannelsArray = [channel.onNativeReady, channel.onPluginsReady];
 
     function logUnfiredChannels(arr) {
@@ -6031,122 +7144,25 @@ window.cordova = require('cordova');
 
     }, platformInitChannelsArray);
 
-}(window));
-
-// file: lib\scripts\plugin_loader.js
-
-// Tries to load all plugins' js-modules.
-// This is an async process, but onDeviceReady is blocked on onPluginsReady.
-// onPluginsReady is fired when there are no plugins to load, or they are all done.
-(function (context) {
-    // To be populated with the handler by handlePluginsObject.
-    var onScriptLoadingComplete;
-
-    var scriptCounter = 0;
-    function scriptLoadedCallback() {
-        scriptCounter--;
-        if (scriptCounter === 0) {
-            onScriptLoadingComplete && onScriptLoadingComplete();
-        }
-    }
-
-    // Helper function to inject a <script> tag.
-    function injectScript(path) {
-        scriptCounter++;
-        var script = document.createElement("script");
-        script.onload = scriptLoadedCallback;
-        script.src = path;
-        document.head.appendChild(script);
-    }
-
-    // Called when:
-    // * There are plugins defined and all plugins are finished loading.
-    // * There are no plugins to load.
-    function finishPluginLoading() {
-        context.cordova.require('cordova/channel').onPluginsReady.fire();
-    }
-
-    // Handler for the cordova_plugins.json content.
-    // See plugman's plugin_loader.js for the details of this object.
-    // This function is only called if the really is a plugins array that isn't empty.
-    // Otherwise the XHR response handler will just call finishPluginLoading().
-    function handlePluginsObject(modules, path) {
-        // First create the callback for when all plugins are loaded.
-        var mapper = context.cordova.require('cordova/modulemapper');
-        onScriptLoadingComplete = function() {
-            // Loop through all the plugins and then through their clobbers and merges.
-            for (var i = 0; i < modules.length; i++) {
-                var module = modules[i];
-                if (!module) continue;
-
-                if (module.clobbers && module.clobbers.length) {
-                    for (var j = 0; j < module.clobbers.length; j++) {
-                        mapper.clobbers(module.id, module.clobbers[j]);
-                    }
-                }
-
-                if (module.merges && module.merges.length) {
-                    for (var k = 0; k < module.merges.length; k++) {
-                        mapper.merges(module.id, module.merges[k]);
-                    }
-                }
-
-                // Finally, if runs is truthy we want to simply require() the module.
-                // This can be skipped if it had any merges or clobbers, though,
-                // since the mapper will already have required the module.
-                if (module.runs && !(module.clobbers && module.clobbers.length) && !(module.merges && module.merges.length)) {
-                    context.cordova.require(module.id);
-                }
-            }
-
-            finishPluginLoading();
-        };
-
-        // Now inject the scripts.
-        for (var i = 0; i < modules.length; i++) {
-            injectScript(path + modules[i].file);
-        }
-    }
-
-    // Find the root of the app
-    var path = '';
-    var scripts = document.getElementsByTagName('script');
-    var term = 'cordova.js';
-    for (var n = scripts.length-1; n>-1; n--) {
-        var src = scripts[n].src;
-        if (src.indexOf(term) == (src.length - term.length)) {
-            path = src.substring(0, src.length - term.length);
-            break;
-        }
-    }
-    // Try to XHR the cordova_plugins.json file asynchronously.
-    var xhr = new XMLHttpRequest();
-    xhr.onload = function() {
-        // If the response is a JSON string which composes an array, call handlePluginsObject.
-        // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
-        var obj;
-        try {
-            obj = (this.status == 0 || this.status == 200) && this.responseText && JSON.parse(this.responseText);
-        } catch (err) {
-            // obj will be undefined.
-        }
-        if (Array.isArray(obj) && obj.length > 0) {
-            handlePluginsObject(obj, path);
-        } else {
-            finishPluginLoading();
-        }
-    };
-    xhr.onerror = function() {
-        finishPluginLoading();
-    };
-    var plugins_json = path + 'cordova_plugins.json';
-    try { // we commented we were going to try, so let us actually try and catch
-        xhr.open('GET', plugins_json, true); // Async
-        xhr.send();
-    } catch(err){
-        finishPluginLoading();
+    // Don't attempt to load when running unit tests.
+    if (typeof XMLHttpRequest != 'undefined') {
+        pluginloader.load();
     }
 }(window));
 
+// file: lib/scripts/bootstrap-webos.js
+
+// if WEBOS_CORDOVA_DELAY_NATIVE_READY is set in the environment
+// before Cordova loads, we will set a response method,
+// WEBOS_CORDOVA_FIRE_NATIVE_READY, to be called at a future time.
+// This is to support preloaded app container windows that exist
+// to optimize app load time.
+if (!window.WEBOS_CORDOVA_DELAY_NATIVE_READY) {
+    require('cordova/channel').onNativeReady.fire();
+} else {
+    window.WEBOS_CORDOVA_FIRE_NATIVE_READY = function() {
+        require('cordova/channel').onNativeReady.fire();
+    };
+}
 
 })();
