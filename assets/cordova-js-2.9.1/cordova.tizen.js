@@ -1,9 +1,5 @@
-﻿// Platform: windowsphone
-
-// commit cd29cf0f224ccf25e9d422a33fd02ef67d3a78f4
-
-// File generated at :: Thu Apr 25 2013 15:58:48 GMT-0700 (Pacific Daylight Time)
-
+// Platform: tizen
+// 2.9.1
 /*
  Licensed to the Apache Software Foundation (ASF) under one
  or more contributor license agreements.  See the NOTICE file
@@ -22,26 +18,36 @@
  specific language governing permissions and limitations
  under the License.
 */
-
 ;(function() {
-
-// file: lib\scripts\require.js
+var CORDOVA_JS_BUILD_LABEL = '2.9.1';
+// file: lib/scripts/require.js
 
 var require,
     define;
 
 (function () {
-    var modules = {};
+    var modules = {},
     // Stack of moduleIds currently being built.
-    var requireStack = [];
+        requireStack = [],
     // Map of module ID -> index into requireStack of modules currently being built.
-    var inProgressModules = {};
+        inProgressModules = {},
+        SEPERATOR = ".";
+
+
 
     function build(module) {
-        var factory = module.factory;
+        var factory = module.factory,
+            localRequire = function (id) {
+                var resultantId = id;
+                //Its a relative path, so lop off the last portion and add the id (minus "./")
+                if (id.charAt(0) === ".") {
+                    resultantId = module.id.slice(0, module.id.lastIndexOf(SEPERATOR)) + SEPERATOR + id.slice(2);
+                }
+                return require(resultantId);
+            };
         module.exports = {};
         delete module.factory;
-        factory(require, module.exports, module);
+        factory(localRequire, module.exports, module);
         return module.exports;
     }
 
@@ -94,6 +100,7 @@ define("cordova", function(require, exports, module) {
 
 
 var channel = require('cordova/channel');
+var platform = require('cordova/platform');
 
 /**
  * Listen for DOMContentLoaded and notify our channel subscribers.
@@ -176,10 +183,18 @@ if(typeof window.console === "undefined") {
         log:function(){}
     };
 }
+// there are places in the framework where we call `warn` also, so we should make sure it exists
+if(typeof window.console.warn === "undefined") {
+    window.console.warn = function(msg) {
+        this.log("warn: " + msg);
+    };
+}
 
 var cordova = {
     define:define,
     require:require,
+    version:CORDOVA_JS_BUILD_LABEL,
+    platformId:platform.id,
     /**
      * Methods to add/remove your own addEventListener hijacking on document + window.
      */
@@ -215,16 +230,16 @@ var cordova = {
         var evt = createEvent(type, data);
         if (typeof documentEventHandlers[type] != 'undefined') {
             if( bNoDetach ) {
-              documentEventHandlers[type].fire(evt);
+                documentEventHandlers[type].fire(evt);
             }
             else {
-              setTimeout(function() {
-                  // Fire deviceready on listeners that were registered before cordova.js was loaded.
-                  if (type == 'deviceready') {
-                      document.dispatchEvent(evt);
-                  }
-                  documentEventHandlers[type].fire(evt);
-              }, 0);
+                setTimeout(function() {
+                    // Fire deviceready on listeners that were registered before cordova.js was loaded.
+                    if (type == 'deviceready') {
+                        document.dispatchEvent(evt);
+                    }
+                    documentEventHandlers[type].fire(evt);
+                }, 0);
             }
         } else {
             document.dispatchEvent(evt);
@@ -323,7 +338,7 @@ module.exports = cordova;
 
 });
 
-// file: lib\common\argscheck.js
+// file: lib/common/argscheck.js
 define("cordova/argscheck", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -341,7 +356,7 @@ var typeMap = {
 };
 
 function extractParamName(callee, argIndex) {
-  return (/.*?\((.*?)\)/).exec(callee)[1].split(', ')[argIndex];
+    return (/.*?\((.*?)\)/).exec(callee)[1].split(', ')[argIndex];
 }
 
 function checkArgs(spec, functionName, args, opt_callee) {
@@ -370,7 +385,7 @@ function checkArgs(spec, functionName, args, opt_callee) {
     if (errMsg) {
         errMsg += ', but got ' + typeName + '.';
         errMsg = 'Wrong type for parameter "' + extractParamName(opt_callee || args.callee, i) + '" of ' + functionName + ': ' + errMsg;
-        // Don't log when running jake test.
+        // Don't log when running unit tests.
         if (typeof jasmine == 'undefined') {
             console.error(errMsg);
         }
@@ -389,7 +404,63 @@ moduleExports.enableChecks = true;
 
 });
 
-// file: lib\common\builder.js
+// file: lib/common/base64.js
+define("cordova/base64", function(require, exports, module) {
+
+var base64 = exports;
+
+base64.fromArrayBuffer = function(arrayBuffer) {
+    var array = new Uint8Array(arrayBuffer);
+    return uint8ToBase64(array);
+};
+
+//------------------------------------------------------------------------------
+
+/* This code is based on the performance tests at http://jsperf.com/b64tests
+ * This 12-bit-at-a-time algorithm was the best performing version on all
+ * platforms tested.
+ */
+
+var b64_6bit = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var b64_12bit;
+
+var b64_12bitTable = function() {
+    b64_12bit = [];
+    for (var i=0; i<64; i++) {
+        for (var j=0; j<64; j++) {
+            b64_12bit[i*64+j] = b64_6bit[i] + b64_6bit[j];
+        }
+    }
+    b64_12bitTable = function() { return b64_12bit; };
+    return b64_12bit;
+};
+
+function uint8ToBase64(rawData) {
+    var numBytes = rawData.byteLength;
+    var output="";
+    var segment;
+    var table = b64_12bitTable();
+    for (var i=0;i<numBytes-2;i+=3) {
+        segment = (rawData[i] << 16) + (rawData[i+1] << 8) + rawData[i+2];
+        output += table[segment >> 12];
+        output += table[segment & 0xfff];
+    }
+    if (numBytes - i == 2) {
+        segment = (rawData[i] << 16) + (rawData[i+1] << 8);
+        output += table[segment >> 12];
+        output += b64_6bit[(segment & 0xfff) >> 6];
+        output += '=';
+    } else if (numBytes - i == 1) {
+        segment = (rawData[i] << 16);
+        output += table[segment >> 12];
+        output += '==';
+    }
+    return output;
+}
+
+});
+
+// file: lib/common/builder.js
 define("cordova/builder", function(require, exports, module) {
 
 var utils = require('cordova/utils');
@@ -429,36 +500,36 @@ function assignOrWrapInDeprecateGetter(obj, key, value, message) {
 function include(parent, objects, clobber, merge) {
     each(objects, function (obj, key) {
         try {
-          var result = obj.path ? require(obj.path) : {};
+            var result = obj.path ? require(obj.path) : {};
 
-          if (clobber) {
-              // Clobber if it doesn't exist.
-              if (typeof parent[key] === 'undefined') {
-                  assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
-              } else if (typeof obj.path !== 'undefined') {
-                  // If merging, merge properties onto parent, otherwise, clobber.
-                  if (merge) {
-                      recursiveMerge(parent[key], result);
-                  } else {
-                      assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
-                  }
-              }
-              result = parent[key];
-          } else {
-            // Overwrite if not currently defined.
-            if (typeof parent[key] == 'undefined') {
-              assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+            if (clobber) {
+                // Clobber if it doesn't exist.
+                if (typeof parent[key] === 'undefined') {
+                    assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                } else if (typeof obj.path !== 'undefined') {
+                    // If merging, merge properties onto parent, otherwise, clobber.
+                    if (merge) {
+                        recursiveMerge(parent[key], result);
+                    } else {
+                        assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                    }
+                }
+                result = parent[key];
             } else {
-              // Set result to what already exists, so we can build children into it if they exist.
-              result = parent[key];
+                // Overwrite if not currently defined.
+                if (typeof parent[key] == 'undefined') {
+                    assignOrWrapInDeprecateGetter(parent, key, result, obj.deprecated);
+                } else {
+                    // Set result to what already exists, so we can build children into it if they exist.
+                    result = parent[key];
+                }
             }
-          }
 
-          if (obj.children) {
-            include(result, obj.children, clobber, merge);
-          }
+            if (obj.children) {
+                include(result, obj.children, clobber, merge);
+            }
         } catch(e) {
-          utils.alert('Exception building cordova JS globals: ' + e + ' for key "' + key + '"');
+            utils.alert('Exception building cordova JS globals: ' + e + ' for key "' + key + '"');
         }
     });
 }
@@ -502,7 +573,7 @@ exports.replaceHookForTesting = function() {};
 
 });
 
-// file: lib\common\channel.js
+// file: lib/common/channel.js
 define("cordova/channel", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -752,7 +823,7 @@ module.exports = channel;
 
 });
 
-// file: lib\common\commandProxy.js
+// file: lib/common/commandProxy.js
 define("cordova/commandProxy", function(require, exports, module) {
 
 
@@ -782,10 +853,8 @@ module.exports = {
 };
 });
 
-// file: lib\windowsphone\exec.js
+// file: lib/tizen/exec.js
 define("cordova/exec", function(require, exports, module) {
-
-var cordova = require('cordova');
 
 /**
  * Execute a cordova command.  It is up to the native side whether this action
@@ -795,47 +864,114 @@ var cordova = require('cordova');
  * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
  * depending upon the result of the action.
  *
- * @param {Function} success    The success callback
- * @param {Function} fail       The fail callback
+ * @param {Function} successCB  The success callback
+ * @param {Function} failCB     The fail callback
  * @param {String} service      The name of the service to use
  * @param {String} action       Action to be run in cordova
  * @param {String[]} [args]     Zero or more arguments to pass to the method
-
+ */
+/**
+ * Execute a cordova command.  It is up to the native side whether this action
+ * is synchronous or asynchronous.  The native side can return:
+ *      Synchronous: PluginResult object as a JSON string
+ *      Asynchronous: Empty string ""
+ * If async, the native side will cordova.callbackSuccess or cordova.callbackError,
+ * depending upon the result of the action.
+ *
+ * @param {Function} successCB  The success callback
+ * @param {Function} failCB     The fail callback
+ * @param {String} service      The name of the service to use
+ * @param {String} action       Action to be run in cordova
+ * @param {String[]} [args]     Zero or more arguments to pass to the method
  */
 
-module.exports = function(success, fail, service, action, args) {
+//console.log("TIZEN EXEC START");
 
-    var callbackId = service + cordova.callbackId++;
-    if (typeof success == "function" || typeof fail == "function") {
-        cordova.callbacks[callbackId] = {success:success, fail:fail};
-    }
-    // generate a new command string, ex. DebugConsole/log/DebugConsole23/["wtf dude?"]
-    for(var n = 0; n < args.length; n++)
-    {
-        if(typeof args[n] !== "string")
-        {
-            args[n] = JSON.stringify(args[n]);
-        }
-    }
-    var command = service + "/" + action + "/" + callbackId + "/" + JSON.stringify(args);
-    // pass it on to Notify
+
+var manager = require('cordova/plugin/tizen/manager'),
+    cordova = require('cordova'),
+    utils = require('cordova/utils');
+
+//console.log("TIZEN EXEC START bis");
+
+module.exports = function(successCB, failCB, service, action, args) {
+
     try {
-        if(window.external) {
-            window.external.Notify(command);
+        var v = manager.exec(successCB, failCB, service, action, args);
+
+        // If status is OK, then return value back to caller
+        if (v.status == cordova.callbackStatus.OK) {
+
+            // If there is a success callback, then call it now with returned value
+            if (successCB) {
+                try {
+                    successCB(v.message);
+                }
+                catch (e) {
+                    console.log("Error in success callback: "+ service + "." + action + " = " + e);
+                }
+
+            }
+            return v.message;
+        } else if (v.status == cordova.callbackStatus.NO_RESULT) {
+            // Nothing to do here
+        } else {
+            // If error, then display error
+            console.log("Error: " + service + "." + action + " Status=" + v.status + " Message=" + v.message);
+
+            // If there is a fail callback, then call it now with returned value
+            if (failCB) {
+                try {
+                    failCB(v.message);
+                }
+                catch (e) {
+                    console.log("Error in error callback: " + service + "." + action + " = "+e);
+                }
+            }
+            return null;
         }
-        else {
-            console.log("window.external not available :: command=" + command);
-        }
-    }
-    catch(e) {
-        console.log("Exception calling native with command :: " + command + " :: exception=" + e);
+    } catch (e) {
+        utils.alert("Error: " + e);
     }
 };
 
+//console.log("TIZEN EXEC END ");
+
+/*
+var plugins = {
+    "Device": require('cordova/plugin/tizen/Device'),
+    "NetworkStatus": require('cordova/plugin/tizen/NetworkStatus'),
+    "Accelerometer": require('cordova/plugin/tizen/Accelerometer'),
+    "Battery": require('cordova/plugin/tizen/Battery'),
+    "Compass": require('cordova/plugin/tizen/Compass'),
+    //"Capture": require('cordova/plugin/tizen/Capture'), not yet available
+    "Camera": require('cordova/plugin/tizen/Camera'),
+    "FileTransfer": require('cordova/plugin/tizen/FileTransfer'),
+    "Media": require('cordova/plugin/tizen/Media'),
+    "Notification": require('cordova/plugin/tizen/Notification')
+};
+
+console.log("TIZEN EXEC START");
+
+module.exports = function(success, fail, service, action, args) {
+    try {
+        console.log("exec: " + service + "." + action);
+        plugins[service][action](success, fail, args);
+    }
+    catch(e) {
+        console.log("missing exec: " + service + "." + action);
+        console.log(args);
+        console.log(e);
+        console.log(e.stack);
+    }
+};
+
+console.log("TIZEN EXEC START");
+*/
 
 });
 
-// file: lib\common\modulemapper.js
+// file: lib/common/modulemapper.js
 define("cordova/modulemapper", function(require, exports, module) {
 
 var builder = require('cordova/builder'),
@@ -871,6 +1007,10 @@ exports.defaults = function(moduleName, symbolPath, opt_deprecationMessage) {
     addEntry('d', moduleName, symbolPath, opt_deprecationMessage);
 };
 
+exports.runs = function(moduleName) {
+    addEntry('r', moduleName, null);
+};
+
 function prepareNamespace(symbolPath, context) {
     if (!symbolPath) {
         return context;
@@ -889,12 +1029,16 @@ exports.mapModules = function(context) {
     for (var i = 0, len = symbolList.length; i < len; i += 3) {
         var strategy = symbolList[i];
         var moduleName = symbolList[i + 1];
+        var module = require(moduleName);
+        // <runs/>
+        if (strategy == 'r') {
+            continue;
+        }
         var symbolPath = symbolList[i + 2];
         var lastDot = symbolPath.lastIndexOf('.');
         var namespace = symbolPath.substr(0, lastDot);
         var lastName = symbolPath.substr(lastDot + 1);
 
-        var module = require(moduleName);
         var deprecationMsg = symbolPath in deprecationMap ? 'Access made to deprecated symbol: ' + symbolPath + '. ' + deprecationMsg : null;
         var parentObj = prepareNamespace(namespace, context);
         var target = parentObj[lastName];
@@ -936,34 +1080,37 @@ exports.reset();
 
 });
 
-// file: lib\windowsphone\platform.js
+// file: lib/tizen/platform.js
 define("cordova/platform", function(require, exports, module) {
 
-var cordova = require('cordova'),
-      exec = require('cordova/exec');
+//console.log("TIZEN PLATFORM START");
+
 
 module.exports = {
-    id: "windowsphone",
-    initialize:function() {
+    id: "tizen",
+    initialize: function() {
+
+        //console.log("TIZEN PLATFORM initialize start");
+
         var modulemapper = require('cordova/modulemapper');
 
-        modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
+        //modulemapper.loadMatchingModules(/cordova.*\/plugininit$/);
 
         modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
 
         modulemapper.mapModules(window);
 
-        // Inject a listener for the backbutton, and tell native to override the flag (true/false) when we have 1 or more, or 0, listeners
-        var backButtonChannel = cordova.addDocumentEventHandler('backbutton');
-        backButtonChannel.onHasSubscribersChange = function() {
-            exec(null, null, "CoreEvents", "overridebackbutton", [this.numHandlers == 1]);
-        };
+        //console.log("TIZEN PLATFORM initialize end");
+
     }
 };
 
+//console.log("TIZEN PLATFORM START");
+
+
 });
 
-// file: lib\common\plugin\Acceleration.js
+// file: lib/common/plugin/Acceleration.js
 define("cordova/plugin/Acceleration", function(require, exports, module) {
 
 var Acceleration = function(x, y, z, timestamp) {
@@ -977,7 +1124,7 @@ module.exports = Acceleration;
 
 });
 
-// file: lib\common\plugin\Camera.js
+// file: lib/common/plugin/Camera.js
 define("cordova/plugin/Camera", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1035,7 +1182,7 @@ module.exports = cameraExport;
 
 });
 
-// file: lib\common\plugin\CameraConstants.js
+// file: lib/common/plugin/CameraConstants.js
 define("cordova/plugin/CameraConstants", function(require, exports, module) {
 
 module.exports = {
@@ -1073,7 +1220,7 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\CameraPopoverHandle.js
+// file: lib/common/plugin/CameraPopoverHandle.js
 define("cordova/plugin/CameraPopoverHandle", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -1091,7 +1238,7 @@ module.exports = CameraPopoverHandle;
 
 });
 
-// file: lib\common\plugin\CameraPopoverOptions.js
+// file: lib/common/plugin/CameraPopoverOptions.js
 define("cordova/plugin/CameraPopoverOptions", function(require, exports, module) {
 
 var Camera = require('cordova/plugin/CameraConstants');
@@ -1113,7 +1260,7 @@ module.exports = CameraPopoverOptions;
 
 });
 
-// file: lib\common\plugin\CaptureAudioOptions.js
+// file: lib/common/plugin/CaptureAudioOptions.js
 define("cordova/plugin/CaptureAudioOptions", function(require, exports, module) {
 
 /**
@@ -1124,15 +1271,13 @@ var CaptureAudioOptions = function(){
     this.limit = 1;
     // Maximum duration of a single sound clip in seconds.
     this.duration = 0;
-    // The selected audio mode. Must match with one of the elements in supportedAudioModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureAudioOptions;
 
 });
 
-// file: lib\common\plugin\CaptureError.js
+// file: lib/common/plugin/CaptureError.js
 define("cordova/plugin/CaptureError", function(require, exports, module) {
 
 /**
@@ -1157,7 +1302,7 @@ module.exports = CaptureError;
 
 });
 
-// file: lib\common\plugin\CaptureImageOptions.js
+// file: lib/common/plugin/CaptureImageOptions.js
 define("cordova/plugin/CaptureImageOptions", function(require, exports, module) {
 
 /**
@@ -1166,15 +1311,13 @@ define("cordova/plugin/CaptureImageOptions", function(require, exports, module) 
 var CaptureImageOptions = function(){
     // Upper limit of images user can take. Value must be equal or greater than 1.
     this.limit = 1;
-    // The selected image mode. Must match with one of the elements in supportedImageModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureImageOptions;
 
 });
 
-// file: lib\common\plugin\CaptureVideoOptions.js
+// file: lib/common/plugin/CaptureVideoOptions.js
 define("cordova/plugin/CaptureVideoOptions", function(require, exports, module) {
 
 /**
@@ -1185,15 +1328,13 @@ var CaptureVideoOptions = function(){
     this.limit = 1;
     // Maximum duration of a single video clip in seconds.
     this.duration = 0;
-    // The selected video mode. Must match with one of the elements in supportedVideoModes array.
-    this.mode = null;
 };
 
 module.exports = CaptureVideoOptions;
 
 });
 
-// file: lib\common\plugin\CompassError.js
+// file: lib/common/plugin/CompassError.js
 define("cordova/plugin/CompassError", function(require, exports, module) {
 
 /**
@@ -1212,7 +1353,7 @@ module.exports = CompassError;
 
 });
 
-// file: lib\common\plugin\CompassHeading.js
+// file: lib/common/plugin/CompassHeading.js
 define("cordova/plugin/CompassHeading", function(require, exports, module) {
 
 var CompassHeading = function(magneticHeading, trueHeading, headingAccuracy, timestamp) {
@@ -1226,7 +1367,7 @@ module.exports = CompassHeading;
 
 });
 
-// file: lib\common\plugin\ConfigurationData.js
+// file: lib/common/plugin/ConfigurationData.js
 define("cordova/plugin/ConfigurationData", function(require, exports, module) {
 
 /**
@@ -1247,7 +1388,7 @@ module.exports = ConfigurationData;
 
 });
 
-// file: lib\common\plugin\Connection.js
+// file: lib/common/plugin/Connection.js
 define("cordova/plugin/Connection", function(require, exports, module) {
 
 /**
@@ -1266,7 +1407,7 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\Contact.js
+// file: lib/common/plugin/Contact.js
 define("cordova/plugin/Contact", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1428,7 +1569,7 @@ module.exports = Contact;
 
 });
 
-// file: lib\common\plugin\ContactAddress.js
+// file: lib/common/plugin/ContactAddress.js
 define("cordova/plugin/ContactAddress", function(require, exports, module) {
 
 /**
@@ -1459,7 +1600,7 @@ module.exports = ContactAddress;
 
 });
 
-// file: lib\common\plugin\ContactError.js
+// file: lib/common/plugin/ContactError.js
 define("cordova/plugin/ContactError", function(require, exports, module) {
 
 /**
@@ -1486,7 +1627,7 @@ module.exports = ContactError;
 
 });
 
-// file: lib\common\plugin\ContactField.js
+// file: lib/common/plugin/ContactField.js
 define("cordova/plugin/ContactField", function(require, exports, module) {
 
 /**
@@ -1508,7 +1649,7 @@ module.exports = ContactField;
 
 });
 
-// file: lib\common\plugin\ContactFindOptions.js
+// file: lib/common/plugin/ContactFindOptions.js
 define("cordova/plugin/ContactFindOptions", function(require, exports, module) {
 
 /**
@@ -1527,7 +1668,7 @@ module.exports = ContactFindOptions;
 
 });
 
-// file: lib\common\plugin\ContactName.js
+// file: lib/common/plugin/ContactName.js
 define("cordova/plugin/ContactName", function(require, exports, module) {
 
 /**
@@ -1553,7 +1694,7 @@ module.exports = ContactName;
 
 });
 
-// file: lib\common\plugin\ContactOrganization.js
+// file: lib/common/plugin/ContactOrganization.js
 define("cordova/plugin/ContactOrganization", function(require, exports, module) {
 
 /**
@@ -1582,7 +1723,7 @@ module.exports = ContactOrganization;
 
 });
 
-// file: lib\common\plugin\Coordinates.js
+// file: lib/common/plugin/Coordinates.js
 define("cordova/plugin/Coordinates", function(require, exports, module) {
 
 /**
@@ -1636,7 +1777,7 @@ module.exports = Coordinates;
 
 });
 
-// file: lib\common\plugin\DirectoryEntry.js
+// file: lib/common/plugin/DirectoryEntry.js
 define("cordova/plugin/DirectoryEntry", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1727,7 +1868,7 @@ module.exports = DirectoryEntry;
 
 });
 
-// file: lib\common\plugin\DirectoryReader.js
+// file: lib/common/plugin/DirectoryReader.js
 define("cordova/plugin/DirectoryReader", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -1738,6 +1879,7 @@ var exec = require('cordova/exec'),
  */
 function DirectoryReader(path) {
     this.path = path || null;
+    this.hasReadEntries = false;
 }
 
 /**
@@ -1747,6 +1889,12 @@ function DirectoryReader(path) {
  * @param {Function} errorCallback is called with a FileError
  */
 DirectoryReader.prototype.readEntries = function(successCallback, errorCallback) {
+    // If we've already read and passed on this directory's entries, return an empty list.
+    if (this.hasReadEntries) {
+        successCallback([]);
+        return;
+    }
+    var reader = this;
     var win = typeof successCallback !== 'function' ? null : function(result) {
         var retVal = [];
         for (var i=0; i<result.length; i++) {
@@ -1763,6 +1911,7 @@ DirectoryReader.prototype.readEntries = function(successCallback, errorCallback)
             entry.fullPath = result[i].fullPath;
             retVal.push(entry);
         }
+        reader.hasReadEntries = true;
         successCallback(retVal);
     };
     var fail = typeof errorCallback !== 'function' ? null : function(code) {
@@ -1775,7 +1924,7 @@ module.exports = DirectoryReader;
 
 });
 
-// file: lib\common\plugin\Entry.js
+// file: lib/common/plugin/Entry.js
 define("cordova/plugin/Entry", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -1980,7 +2129,7 @@ module.exports = Entry;
 
 });
 
-// file: lib\common\plugin\File.js
+// file: lib/common/plugin/File.js
 define("cordova/plugin/File", function(require, exports, module) {
 
 /**
@@ -2042,7 +2191,7 @@ module.exports = File;
 
 });
 
-// file: lib\common\plugin\FileEntry.js
+// file: lib/common/plugin/FileEntry.js
 define("cordova/plugin/FileEntry", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -2107,7 +2256,7 @@ module.exports = FileEntry;
 
 });
 
-// file: lib\common\plugin\FileError.js
+// file: lib/common/plugin/FileError.js
 define("cordova/plugin/FileError", function(require, exports, module) {
 
 /**
@@ -2138,7 +2287,7 @@ module.exports = FileError;
 
 });
 
-// file: lib\common\plugin\FileReader.js
+// file: lib/common/plugin/FileReader.js
 define("cordova/plugin/FileReader", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -2206,11 +2355,7 @@ function initRead(reader, file) {
     reader._error = null;
     reader._readyState = FileReader.LOADING;
 
-    if (typeof file == 'string') {
-        // Deprecated in Cordova 2.4.
-        console.warn('Using a string argument with FileReader.readAs functions is deprecated.');
-        reader._fileName = file;
-    } else if (typeof file.fullPath == 'string') {
+    if (typeof file.fullPath == 'string') {
         reader._fileName = file.fullPath;
     } else {
         reader._fileName = '';
@@ -2514,7 +2659,7 @@ module.exports = FileReader;
 
 });
 
-// file: lib\common\plugin\FileSystem.js
+// file: lib/common/plugin/FileSystem.js
 define("cordova/plugin/FileSystem", function(require, exports, module) {
 
 var DirectoryEntry = require('cordova/plugin/DirectoryEntry');
@@ -2537,7 +2682,7 @@ module.exports = FileSystem;
 
 });
 
-// file: lib\common\plugin\FileTransfer.js
+// file: lib/common/plugin/FileTransfer.js
 define("cordova/plugin/FileTransfer", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -2729,7 +2874,7 @@ module.exports = FileTransfer;
 
 });
 
-// file: lib\common\plugin\FileTransferError.js
+// file: lib/common/plugin/FileTransferError.js
 define("cordova/plugin/FileTransferError", function(require, exports, module) {
 
 /**
@@ -2753,7 +2898,7 @@ module.exports = FileTransferError;
 
 });
 
-// file: lib\common\plugin\FileUploadOptions.js
+// file: lib/common/plugin/FileUploadOptions.js
 define("cordova/plugin/FileUploadOptions", function(require, exports, module) {
 
 /**
@@ -2779,7 +2924,7 @@ module.exports = FileUploadOptions;
 
 });
 
-// file: lib\common\plugin\FileUploadResult.js
+// file: lib/common/plugin/FileUploadResult.js
 define("cordova/plugin/FileUploadResult", function(require, exports, module) {
 
 /**
@@ -2796,7 +2941,7 @@ module.exports = FileUploadResult;
 
 });
 
-// file: lib\common\plugin\FileWriter.js
+// file: lib/common/plugin/FileWriter.js
 define("cordova/plugin/FileWriter", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -2873,9 +3018,32 @@ FileWriter.prototype.abort = function() {
 /**
  * Writes data to the file
  *
- * @param text to be written
+ * @param data text or blob to be written
  */
-FileWriter.prototype.write = function(text) {
+FileWriter.prototype.write = function(data) {
+
+    var that=this;
+    var supportsBinary = (typeof window.Blob !== 'undefined' && typeof window.ArrayBuffer !== 'undefined');
+    var isBinary;
+
+    // Check to see if the incoming data is a blob
+    if (data instanceof File || (supportsBinary && data instanceof Blob)) {
+        var fileReader = new FileReader();
+        fileReader.onload = function() {
+            // Call this method again, with the arraybuffer as argument
+            FileWriter.prototype.write.call(that, this.result);
+        };
+        if (supportsBinary) {
+            fileReader.readAsArrayBuffer(data);
+        } else {
+            fileReader.readAsText(data);
+        }
+        return;
+    }
+
+    // Mark data type for safer transport over the binary bridge
+    isBinary = supportsBinary && (data instanceof ArrayBuffer);
+
     // Throw an exception if we are already writing a file
     if (this.readyState === FileWriter.WRITING) {
         throw new FileError(FileError.INVALID_STATE_ERR);
@@ -2941,7 +3109,7 @@ FileWriter.prototype.write = function(text) {
             if (typeof me.onwriteend === "function") {
                 me.onwriteend(new ProgressEvent("writeend", {"target":me}));
             }
-        }, "File", "write", [this.fileName, text, this.position]);
+        }, "File", "write", [this.fileName, data, this.position, isBinary]);
 };
 
 /**
@@ -3055,7 +3223,7 @@ module.exports = FileWriter;
 
 });
 
-// file: lib\common\plugin\Flags.js
+// file: lib/common/plugin/Flags.js
 define("cordova/plugin/Flags", function(require, exports, module) {
 
 /**
@@ -3076,7 +3244,7 @@ module.exports = Flags;
 
 });
 
-// file: lib\common\plugin\GlobalizationError.js
+// file: lib/common/plugin/GlobalizationError.js
 define("cordova/plugin/GlobalizationError", function(require, exports, module) {
 
 
@@ -3102,12 +3270,13 @@ module.exports = GlobalizationError;
 
 });
 
-// file: lib\common\plugin\InAppBrowser.js
+// file: lib/common/plugin/InAppBrowser.js
 define("cordova/plugin/InAppBrowser", function(require, exports, module) {
 
 var exec = require('cordova/exec');
 var channel = require('cordova/channel');
 var modulemapper = require('cordova/modulemapper');
+var urlutil = require('cordova/urlutil');
 
 function InAppBrowser() {
    this.channels = {
@@ -3116,6 +3285,7 @@ function InAppBrowser() {
         'loaderror' : channel.create('loaderror'),
         'exit' : channel.create('exit')
    };
+   this._alive = true;
 }
 
 InAppBrowser.prototype = {
@@ -3125,7 +3295,13 @@ InAppBrowser.prototype = {
         }
     },
     close: function (eventname) {
-        exec(null, null, "InAppBrowser", "close", []);
+        if (this._alive) {
+            this._alive = false;
+            exec(null, null, "InAppBrowser", "close", []);
+        }
+    },
+    show: function (eventname) {
+      exec(null, null, "InAppBrowser", "show", []);
     },
     addEventListener: function (eventname,f) {
         if (eventname in this.channels) {
@@ -3160,16 +3336,17 @@ InAppBrowser.prototype = {
 };
 
 module.exports = function(strUrl, strWindowName, strWindowFeatures) {
-    var iab = new InAppBrowser();
-    var cb = function(eventname) {
-       iab._eventHandler(eventname);
-    };
-
     // Don't catch calls that write to existing frames (e.g. named iframes).
     if (window.frames && window.frames[strWindowName]) {
         var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
         return origOpenFunc.apply(window, arguments);
     }
+
+    strUrl = urlutil.makeAbsolute(strUrl);
+    var iab = new InAppBrowser();
+    var cb = function(eventname) {
+       iab._eventHandler(eventname);
+    };
 
     exec(cb, cb, "InAppBrowser", "open", [strUrl, strWindowName, strWindowFeatures]);
     return iab;
@@ -3178,7 +3355,7 @@ module.exports = function(strUrl, strWindowName, strWindowFeatures) {
 
 });
 
-// file: lib\common\plugin\LocalFileSystem.js
+// file: lib/common/plugin/LocalFileSystem.js
 define("cordova/plugin/LocalFileSystem", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -3197,7 +3374,7 @@ module.exports = LocalFileSystem;
 
 });
 
-// file: lib\common\plugin\Media.js
+// file: lib/common/plugin/Media.js
 define("cordova/plugin/Media", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -3377,7 +3554,7 @@ module.exports = Media;
 
 });
 
-// file: lib\common\plugin\MediaError.js
+// file: lib/common/plugin/MediaError.js
 define("cordova/plugin/MediaError", function(require, exports, module) {
 
 /**
@@ -3417,7 +3594,7 @@ module.exports = _MediaError;
 
 });
 
-// file: lib\common\plugin\MediaFile.js
+// file: lib/common/plugin/MediaFile.js
 define("cordova/plugin/MediaFile", function(require, exports, module) {
 
 var utils = require('cordova/utils'),
@@ -3457,7 +3634,7 @@ module.exports = MediaFile;
 
 });
 
-// file: lib\common\plugin\MediaFileData.js
+// file: lib/common/plugin/MediaFileData.js
 define("cordova/plugin/MediaFileData", function(require, exports, module) {
 
 /**
@@ -3481,7 +3658,7 @@ module.exports = MediaFileData;
 
 });
 
-// file: lib\common\plugin\Metadata.js
+// file: lib/common/plugin/Metadata.js
 define("cordova/plugin/Metadata", function(require, exports, module) {
 
 /**
@@ -3497,7 +3674,7 @@ module.exports = Metadata;
 
 });
 
-// file: lib\common\plugin\Position.js
+// file: lib/common/plugin/Position.js
 define("cordova/plugin/Position", function(require, exports, module) {
 
 var Coordinates = require('cordova/plugin/Coordinates');
@@ -3515,7 +3692,7 @@ module.exports = Position;
 
 });
 
-// file: lib\common\plugin\PositionError.js
+// file: lib/common/plugin/PositionError.js
 define("cordova/plugin/PositionError", function(require, exports, module) {
 
 /**
@@ -3538,7 +3715,7 @@ module.exports = PositionError;
 
 });
 
-// file: lib\common\plugin\ProgressEvent.js
+// file: lib/common/plugin/ProgressEvent.js
 define("cordova/plugin/ProgressEvent", function(require, exports, module) {
 
 // If ProgressEvent exists in global context, use it already, otherwise use our own polyfill
@@ -3590,7 +3767,7 @@ module.exports = ProgressEvent;
 
 });
 
-// file: lib\common\plugin\accelerometer.js
+// file: lib/common/plugin/accelerometer.js
 define("cordova/plugin/accelerometer", function(require, exports, module) {
 
 /**
@@ -3745,7 +3922,7 @@ module.exports = accelerometer;
 
 });
 
-// file: lib\common\plugin\accelerometer\symbols.js
+// file: lib/common/plugin/accelerometer/symbols.js
 define("cordova/plugin/accelerometer/symbols", function(require, exports, module) {
 
 
@@ -3756,7 +3933,7 @@ modulemapper.defaults('cordova/plugin/accelerometer', 'navigator.accelerometer')
 
 });
 
-// file: lib\common\plugin\battery.js
+// file: lib/common/plugin/battery.js
 define("cordova/plugin/battery", function(require, exports, module) {
 
 /**
@@ -3840,7 +4017,7 @@ module.exports = battery;
 
 });
 
-// file: lib\common\plugin\battery\symbols.js
+// file: lib/common/plugin/battery/symbols.js
 define("cordova/plugin/battery/symbols", function(require, exports, module) {
 
 
@@ -3850,7 +4027,7 @@ modulemapper.defaults('cordova/plugin/battery', 'navigator.battery');
 
 });
 
-// file: lib\common\plugin\camera\symbols.js
+// file: lib/common/plugin/camera/symbols.js
 define("cordova/plugin/camera/symbols", function(require, exports, module) {
 
 
@@ -3862,7 +4039,7 @@ modulemapper.defaults('cordova/plugin/CameraPopoverOptions', 'CameraPopoverOptio
 
 });
 
-// file: lib\common\plugin\capture.js
+// file: lib/common/plugin/capture.js
 define("cordova/plugin/capture", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -3940,7 +4117,7 @@ module.exports = new Capture();
 
 });
 
-// file: lib\common\plugin\capture\symbols.js
+// file: lib/common/plugin/capture/symbols.js
 define("cordova/plugin/capture/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -3956,7 +4133,7 @@ modulemapper.clobbers('cordova/plugin/capture', 'navigator.device.capture');
 
 });
 
-// file: lib\common\plugin\compass.js
+// file: lib/common/plugin/compass.js
 define("cordova/plugin/compass", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4043,7 +4220,7 @@ module.exports = compass;
 
 });
 
-// file: lib\common\plugin\compass\symbols.js
+// file: lib/common/plugin/compass/symbols.js
 define("cordova/plugin/compass/symbols", function(require, exports, module) {
 
 
@@ -4055,7 +4232,7 @@ modulemapper.clobbers('cordova/plugin/compass', 'navigator.compass');
 
 });
 
-// file: lib\common\plugin\console-via-logger.js
+// file: lib/common/plugin/console-via-logger.js
 define("cordova/plugin/console-via-logger", function(require, exports, module) {
 
 //------------------------------------------------------------------------------
@@ -4227,7 +4404,7 @@ for (var key in console) {
 
 });
 
-// file: lib\common\plugin\contacts.js
+// file: lib/common/plugin/contacts.js
 define("cordova/plugin/contacts", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4288,7 +4465,7 @@ module.exports = contacts;
 
 });
 
-// file: lib\common\plugin\contacts\symbols.js
+// file: lib/common/plugin/contacts/symbols.js
 define("cordova/plugin/contacts/symbols", function(require, exports, module) {
 
 
@@ -4305,7 +4482,7 @@ modulemapper.clobbers('cordova/plugin/ContactOrganization', 'ContactOrganization
 
 });
 
-// file: lib\common\plugin\device.js
+// file: lib/common/plugin/device.js
 define("cordova/plugin/device", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4325,7 +4502,6 @@ function Device() {
     this.available = false;
     this.platform = null;
     this.version = null;
-    this.name = null;
     this.uuid = null;
     this.cordova = null;
     this.model = null;
@@ -4334,12 +4510,15 @@ function Device() {
 
     channel.onCordovaReady.subscribe(function() {
         me.getInfo(function(info) {
+            var buildLabel = info.cordova;
+            if (buildLabel != CORDOVA_JS_BUILD_LABEL) {
+                buildLabel += ' JS=' + CORDOVA_JS_BUILD_LABEL;
+            }
             me.available = true;
             me.platform = info.platform;
             me.version = info.version;
-            me.name = info.name;
             me.uuid = info.uuid;
-            me.cordova = info.cordova;
+            me.cordova = buildLabel;
             me.model = info.model;
             channel.onCordovaInfoReady.fire();
         },function(e) {
@@ -4364,17 +4543,18 @@ module.exports = new Device();
 
 });
 
-// file: lib\common\plugin\device\symbols.js
+// file: lib/tizen/plugin/device/symbols.js
 define("cordova/plugin/device/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/device', 'device');
+modulemapper.clobbers('cordova/plugin/tizen/Device', 'device');
+modulemapper.merges('cordova/plugin/tizen/Device', 'navigator.device');
 
 });
 
-// file: lib\common\plugin\echo.js
+// file: lib/common/plugin/echo.js
 define("cordova/plugin/echo", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -4412,7 +4592,7 @@ module.exports = function(successCallback, errorCallback, message, forceAsync) {
 
 });
 
-// file: lib\windowsphone\plugin\file\symbols.js
+// file: lib/tizen/plugin/file/symbols.js
 define("cordova/plugin/file/symbols", function(require, exports, module) {
 
 
@@ -4422,10 +4602,11 @@ var modulemapper = require('cordova/modulemapper'),
 symbolshelper(modulemapper.defaults);
 modulemapper.clobbers('cordova/plugin/File', 'File');
 modulemapper.clobbers('cordova/plugin/FileReader', 'FileReader');
+modulemapper.clobbers('cordova/plugin/FileError', 'FileError');
 
 });
 
-// file: lib\common\plugin\file\symbolshelper.js
+// file: lib/common/plugin/file/symbolshelper.js
 define("cordova/plugin/file/symbolshelper", function(require, exports, module) {
 
 module.exports = function(exportFunc) {
@@ -4450,18 +4631,18 @@ module.exports = function(exportFunc) {
 
 });
 
-// file: lib\windowsphone\plugin\filetransfer\symbols.js
+// file: lib/common/plugin/filetransfer/symbols.js
 define("cordova/plugin/filetransfer/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/windowsphone/FileTransfer', 'FileTransfer');
+modulemapper.clobbers('cordova/plugin/FileTransfer', 'FileTransfer');
 modulemapper.clobbers('cordova/plugin/FileTransferError', 'FileTransferError');
 
 });
 
-// file: lib\common\plugin\geolocation.js
+// file: lib/common/plugin/geolocation.js
 define("cordova/plugin/geolocation", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -4657,7 +4838,7 @@ module.exports = geolocation;
 
 });
 
-// file: lib\common\plugin\geolocation\symbols.js
+// file: lib/common/plugin/geolocation/symbols.js
 define("cordova/plugin/geolocation/symbols", function(require, exports, module) {
 
 
@@ -4670,7 +4851,7 @@ modulemapper.clobbers('cordova/plugin/Coordinates', 'Coordinates');
 
 });
 
-// file: lib\common\plugin\globalization.js
+// file: lib/common/plugin/globalization.js
 define("cordova/plugin/globalization", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5046,28 +5227,17 @@ module.exports = globalization;
 
 });
 
-// file: lib\common\plugin\globalization\symbols.js
+// file: lib/tizen/plugin/globalization/symbols.js
 define("cordova/plugin/globalization/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/globalization', 'navigator.globalization');
-modulemapper.clobbers('cordova/plugin/GlobalizationError', 'GlobalizationError');
+modulemapper.merges('cordova/plugin/tizen/Globalization', 'navigator.globalization');
 
 });
 
-// file: lib\windowsphone\plugin\inappbrowser\symbols.js
-define("cordova/plugin/inappbrowser/symbols", function(require, exports, module) {
-
-
-var modulemapper = require('cordova/modulemapper');
-
-modulemapper.clobbers('cordova/plugin/InAppBrowser', 'open');
-
-});
-
-// file: lib\common\plugin\logger.js
+// file: lib/common/plugin/logger.js
 define("cordova/plugin/logger", function(require, exports, module) {
 
 //------------------------------------------------------------------------------
@@ -5097,9 +5267,12 @@ var exec    = require('cordova/exec');
 var utils   = require('cordova/utils');
 
 var UseConsole   = true;
+var UseLogger    = true;
 var Queued       = [];
 var DeviceReady  = false;
 var CurrentLevel;
+
+var originalConsole = console;
 
 /**
  * Logging levels
@@ -5161,8 +5334,7 @@ logger.level = function (value) {
  * Getter/Setter for the useConsole functionality
  *
  * When useConsole is true, the logger will log via the
- * browser 'console' object.  Otherwise, it will use the
- * native Logger plugin.
+ * browser 'console' object.
  */
 logger.useConsole = function (value) {
     if (arguments.length) UseConsole = !!value;
@@ -5184,6 +5356,18 @@ logger.useConsole = function (value) {
     }
 
     return UseConsole;
+};
+
+/**
+ * Getter/Setter for the useLogger functionality
+ *
+ * When useLogger is true, the logger will log via the
+ * native Logger plugin.
+ */
+logger.useLogger = function (value) {
+    // Enforce boolean
+    if (arguments.length) UseLogger = !!value;
+    return UseLogger;
 };
 
 /**
@@ -5255,24 +5439,26 @@ logger.logLevel = function(level /* , ... */) {
         return;
     }
 
-    // if not using the console, use the native logger
-    if (!UseConsole) {
+    // Log using the native logger if that is enabled
+    if (UseLogger) {
         exec(null, null, "Logger", "logLevel", [level, message]);
-        return;
     }
 
-    // make sure console is not using logger
-    if (console.__usingCordovaLogger) {
-        throw new Error("console and logger are too intertwingly");
-    }
+    // Log using the console if that is enabled
+    if (UseConsole) {
+        // make sure console is not using logger
+        if (console.__usingCordovaLogger) {
+            throw new Error("console and logger are too intertwingly");
+        }
 
-    // log to the console
-    switch (level) {
-        case logger.LOG:   console.log(message); break;
-        case logger.ERROR: console.log("ERROR: " + message); break;
-        case logger.WARN:  console.log("WARN: "  + message); break;
-        case logger.INFO:  console.log("INFO: "  + message); break;
-        case logger.DEBUG: console.log("DEBUG: " + message); break;
+        // log to the console
+        switch (level) {
+            case logger.LOG:   originalConsole.log(message); break;
+            case logger.ERROR: originalConsole.log("ERROR: " + message); break;
+            case logger.WARN:  originalConsole.log("WARN: "  + message); break;
+            case logger.INFO:  originalConsole.log("INFO: "  + message); break;
+            case logger.DEBUG: originalConsole.log("DEBUG: " + message); break;
+        }
     }
 };
 
@@ -5381,7 +5567,7 @@ document.addEventListener("deviceready", logger.__onDeviceReady, false);
 
 });
 
-// file: lib\common\plugin\logger\symbols.js
+// file: lib/common/plugin/logger/symbols.js
 define("cordova/plugin/logger/symbols", function(require, exports, module) {
 
 
@@ -5391,7 +5577,7 @@ modulemapper.clobbers('cordova/plugin/logger', 'cordova.logger');
 
 });
 
-// file: lib\windowsphone\plugin\media\symbols.js
+// file: lib/tizen/plugin/media/symbols.js
 define("cordova/plugin/media/symbols", function(require, exports, module) {
 
 
@@ -5399,10 +5585,11 @@ var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/Media', 'Media');
 modulemapper.defaults('cordova/plugin/MediaError', 'MediaError');
+modulemapper.merges('cordova/plugin/tizen/MediaError', 'MediaError');
 
 });
 
-// file: lib\common\plugin\network.js
+// file: lib/common/plugin/network.js
 define("cordova/plugin/network", function(require, exports, module) {
 
 var exec = require('cordova/exec'),
@@ -5474,7 +5661,7 @@ module.exports = me;
 
 });
 
-// file: lib\common\plugin\networkstatus\symbols.js
+// file: lib/common/plugin/networkstatus/symbols.js
 define("cordova/plugin/networkstatus/symbols", function(require, exports, module) {
 
 
@@ -5486,7 +5673,7 @@ modulemapper.defaults('cordova/plugin/Connection', 'Connection');
 
 });
 
-// file: lib\common\plugin\notification.js
+// file: lib/common/plugin/notification.js
 define("cordova/plugin/notification", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -5533,7 +5720,7 @@ module.exports = {
         // Some platforms take an array of button label names.
         // Other platforms take a comma separated list.
         // For compatibility, we convert to the desired type based on the platform.
-        if (platform.id == "android" || platform.id == "ios" || platform.id == "windowsphone") {
+        if (platform.id == "android" || platform.id == "ios" || platform.id == "windowsphone" || platform.id == "blackberry10") {
             if (typeof _buttonLabels === 'string') {
                 var buttonLabelString = _buttonLabels;
                 _buttonLabels = _buttonLabels.split(","); // not crazy about changing the var type here
@@ -5557,12 +5744,14 @@ module.exports = {
      * @param {Function} resultCallback     The callback that is called when user clicks on a button.
      * @param {String} title                Title of the dialog (default: "Prompt")
      * @param {Array} buttonLabels          Array of strings for the button labels (default: ["OK","Cancel"])
+     * @param {String} defaultText          Textbox input value (default: "Default text")
      */
-    prompt: function(message, resultCallback, title, buttonLabels) {
+    prompt: function(message, resultCallback, title, buttonLabels, defaultText) {
         var _message = (message || "Prompt message");
         var _title = (title || "Prompt");
         var _buttonLabels = (buttonLabels || ["OK","Cancel"]);
-        exec(resultCallback, null, "Notification", "prompt", [_message, _title, _buttonLabels]);
+        var _defaultText = (defaultText || "Default text");
+        exec(resultCallback, null, "Notification", "prompt", [_message, _title, _buttonLabels, _defaultText]);
     },
 
     /**
@@ -5587,17 +5776,18 @@ module.exports = {
 
 });
 
-// file: lib\common\plugin\notification\symbols.js
+// file: lib/tizen/plugin/notification/symbols.js
 define("cordova/plugin/notification/symbols", function(require, exports, module) {
 
 
 var modulemapper = require('cordova/modulemapper');
 
 modulemapper.defaults('cordova/plugin/notification', 'navigator.notification');
+modulemapper.merges('cordova/plugin/tizen/Notification', 'navigator.notification');
 
 });
 
-// file: lib\common\plugin\requestFileSystem.js
+// file: lib/common/plugin/requestFileSystem.js
 define("cordova/plugin/requestFileSystem", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5643,7 +5833,7 @@ module.exports = requestFileSystem;
 
 });
 
-// file: lib\common\plugin\resolveLocalFileSystemURI.js
+// file: lib/common/plugin/resolveLocalFileSystemURI.js
 define("cordova/plugin/resolveLocalFileSystemURI", function(require, exports, module) {
 
 var argscheck = require('cordova/argscheck'),
@@ -5692,7 +5882,7 @@ module.exports = function(uri, successCallback, errorCallback) {
 
 });
 
-// file: lib\common\plugin\splashscreen.js
+// file: lib/common/plugin/splashscreen.js
 define("cordova/plugin/splashscreen", function(require, exports, module) {
 
 var exec = require('cordova/exec');
@@ -5710,7 +5900,17 @@ module.exports = splashscreen;
 
 });
 
-// file: lib\common\plugin\splashscreen\symbols.js
+// file: lib/tizen/plugin/splashscreen/symbol.js
+define("cordova/plugin/splashscreen/symbol", function(require, exports, module) {
+
+
+var modulemapper = require('cordova/modulemapper');
+
+modulemapper.merges('cordova/plugin/tizen/SplashScreen', 'splashscreen'); /// is that correct???  PPL
+
+});
+
+// file: lib/common/plugin/splashscreen/symbols.js
 define("cordova/plugin/splashscreen/symbols", function(require, exports, module) {
 
 
@@ -5720,622 +5920,3273 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 
 });
 
-// file: lib\windowsphone\plugin\windowsphone\DOMStorage\plugininit.js
-define("cordova/plugin/windowsphone/DOMStorage/plugininit", function(require, exports, module) {
+// file: lib/tizen/plugin/tizen/Accelerometer.js
+define("cordova/plugin/tizen/Accelerometer", function(require, exports, module) {
 
-(function(win,doc) {
+var accelerometerCallback = null;
 
-var docDomain = null;
-try {
-    docDomain = doc.domain;
-} catch (err) {
-    //console.log("caught exception trying to access document.domain");
+//console.log("TIZEN ACCELEROMETER START");
+
+module.exports = {
+
+    start: function (successCallback, errorCallback) {
+
+        if (accelerometerCallback) {
+            window.removeEventListener("devicemotion", accelerometerCallback, true);
+        }
+
+        accelerometerCallback = function (motion) {
+            successCallback({
+                x: motion.accelerationIncludingGravity.x,
+                y: motion.accelerationIncludingGravity.y,
+                z: motion.accelerationIncludingGravity.z,
+                timestamp: new Date().getTime()
+            });
+        };
+        window.addEventListener("devicemotion", accelerometerCallback, true);
+    },
+
+    stop: function (successCallback, errorCallback) {
+        window.removeEventListener("devicemotion", accelerometerCallback, true);
+        accelerometerCallback = null;
+    }
+};
+
+//console.log("TIZEN ACCELEROMETER END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/Battery.js
+define("cordova/plugin/tizen/Battery", function(require, exports, module) {
+
+/*global tizen:false */
+var batteryListenerId = null;
+
+//console.log("TIZEN BATTERY START");
+
+module.exports = {
+    start: function(successCallback, errorCallback) {
+        var batterySuccessCallback = function(power) {
+            if (successCallback) {
+                successCallback({level: Math.round(power.level * 100), isPlugged: power.isCharging});
+            }
+        };
+
+        if (batteryListenerId === null) {
+            batteryListenerId = tizen.systeminfo.addPropertyValueChangeListener("BATTERY", batterySuccessCallback);
+        }
+
+        tizen.systeminfo.getPropertyValue("BATTERY", batterySuccessCallback, errorCallback);
+    },
+
+    stop: function(successCallback, errorCallback) {
+        tizen.systeminfo.removePropertyValueChangeListener(batteryListenerId);
+        batteryListenerId = null;
+    }
+};
+
+//console.log("TIZEN BATTERY END");
+
+});
+
+// file: lib/tizen/plugin/tizen/BufferLoader.js
+define("cordova/plugin/tizen/BufferLoader", function(require, exports, module) {
+
+/*
+ * Buffer Loader Object
+ * This class provides a sound buffer for one or more sounds
+ * held in a local file located by an url
+ *
+ * uses W3C  Web Audio API
+ *
+ * @constructor
+ *
+ * @param {AudioContext} audio context object
+ * @param {Array} urlList, array of url for sound to load
+ * @param {function} callback , called after buffer was loaded
+ *
+ */
+
+function BufferLoader(context, urlList, callback) {
+    this.context = context;
+    this.urlList = urlList;
+    this.onload = callback;
+    this.bufferList = [];
+    this.loadCount = 0;
 }
 
-// conditionally patch the window.localStorage and window.sessionStorage objects
-if (!docDomain || docDomain.length === 0) {
+/*
+ * This method loads a sound into a buffer
+ * @param {Array} urlList, array of url for sound to load
+ * @param {Number} index, buffer index in the array where to load the url sound
+ *
+ */
 
-    var DOMStorage = function(type) {
-        // default type is local
-        if(type == "sessionStorage") {
-            this._type = type;
-        }
-        Object.defineProperty( this, "length", {
-            configurable: true,
-            get: function(){ return this.getLength(); }
-        });
-    };
+BufferLoader.prototype.loadBuffer = function(url, index) {
+    // Load buffer asynchronously
+    var request = null,
+        loader = null;
 
-    DOMStorage.prototype = {
-        _type:"localStorage",
-        _result:null,
-        keys:null,
+    request = new XMLHttpRequest();
 
-        onResult:function(key,valueStr) {
-            if(!this.keys) {
-                this.keys = [];
-            }
-            this._result = valueStr;
-        },
+    if (request === null) {
+        console.log ("BufferLoader.prototype.loadBuffer, cannot allocate XML http request");
+        return;
+    }
 
-        onKeysChanged:function(jsonKeys) {
-            this.keys = JSON.parse(jsonKeys);
+    request.open("GET", url, true);
+    request.responseType = "arraybuffer";
 
-            var key;
-            for(var n = 0,len = this.keys.length; n < len; n++) {
-                key = this.keys[n];
-                if(!this.hasOwnProperty(key)) {
-                    Object.defineProperty( this, key, {
-                        configurable: true,
-                        get: function(){ return this.getItem(key); },
-                        set: function(val){ return this.setItem(key,val); }
-                    });
+    loader = this;
+
+    request.onload = function() {
+        // Asynchronously decode the audio file data in request.response
+        loader.context.decodeAudioData(
+            request.response,
+            function(buffer) {
+                if (!buffer) {
+                    console.log ("BufferLoader.prototype.loadBuffer,error decoding file data: " + url);
+                    return;
+                }
+
+                loader.bufferList[index] = buffer;
+
+                if (++loader.loadCount == loader.urlList.length) {
+                    loader.onload(loader.bufferList);
                 }
             }
-
-        },
-
-        initialize:function() {
-            window.external.Notify("DOMStorage/" + this._type + "/load/keys");
-        },
-
-    /*
-        The length attribute must return the number of key/value pairs currently present
-        in the list associated with the object.
-    */
-        getLength:function() {
-            if(!this.keys) {
-                this.initialize();
-            }
-            return this.keys.length;
-        },
-
-    /*
-        The key(n) method must return the name of the nth key in the list.
-        The order of keys is user-agent defined, but must be consistent within an object so long as the number of keys doesn't change.
-        (Thus, adding or removing a key may change the order of the keys, but merely changing the value of an existing key must not.)
-        If n is greater than or equal to the number of key/value pairs in the object, then this method must return null.
-    */
-        key:function(n) {
-            if(!this.keys) {
-                this.initialize();
-            }
-
-            if(n >= this.keys.length) {
-                return null;
-            } else {
-                return this.keys[n];
-            }
-        },
-
-    /*
-        The getItem(key) method must return the current value associated with the given key.
-        If the given key does not exist in the list associated with the object then this method must return null.
-    */
-        getItem:function(key) {
-            if(!this.keys) {
-                this.initialize();
-            }
-
-            var retVal = null;
-            if(this.keys.indexOf(key) > -1) {
-                window.external.Notify("DOMStorage/" + this._type + "/get/" + key);
-                retVal = window.unescape(decodeURIComponent(this._result));
-                this._result = null;
-            }
-            return retVal;
-        },
-    /*
-        The setItem(key, value) method must first check if a key/value pair with the given key already exists
-        in the list associated with the object.
-        If it does not, then a new key/value pair must be added to the list, with the given key and with its value set to value.
-        If the given key does exist in the list, then it must have its value updated to value.
-        If it couldn't set the new value, the method must raise an QUOTA_EXCEEDED_ERR exception.
-        (Setting could fail if, e.g., the user has disabled storage for the site, or if the quota has been exceeded.)
-    */
-        setItem:function(key,value) {
-            if(!this.keys) {
-                this.initialize();
-            }
-            window.external.Notify("DOMStorage/" + this._type + "/set/" + key + "/" + encodeURIComponent(window.escape(value)));
-        },
-
-    /*
-        The removeItem(key) method must cause the key/value pair with the given key to be removed from the list
-        associated with the object, if it exists.
-        If no item with that key exists, the method must do nothing.
-    */
-        removeItem:function(key) {
-            if(!this.keys) {
-                this.initialize();
-            }
-            var index = this.keys.indexOf(key);
-            if(index > -1) {
-                this.keys.splice(index,1);
-                // TODO: need sanity check for keys ? like 'clear','setItem', ...
-                window.external.Notify("DOMStorage/" + this._type + "/remove/" + key);
-                delete this[key];
-            }
-        },
-
-    /*
-        The clear() method must atomically cause the list associated with the object to be emptied of all
-        key/value pairs, if there are any.
-        If there are none, then the method must do nothing.
-    */
-        clear:function() {
-            if(!this.keys) {
-                this.initialize();
-            }
-
-            for(var n=0,len=this.keys.length; n < len;n++) {
-                // TODO: do we need a sanity check for keys ? like 'clear','setItem', ...
-                delete this[this.keys[n]];
-            }
-            this.keys = [];
-            window.external.Notify("DOMStorage/" + this._type + "/clear/");
-        }
+        );
     };
 
-    // initialize DOMStorage
+    request.onerror = function() {
+        console.log ("BufferLoader.prototype.loadBuffer, XHR error");
+    };
 
-    if (typeof window.localStorage === "undefined") {
+    request.send();
+};
 
-        Object.defineProperty(window, "localStorage", {
-            writable: false,
-            configurable: false,
-            value: new DOMStorage("localStorage")
-        });
-        window.localStorage.initialize();
+/*
+ * This method loads all sounds identified by their url
+ * and that where given to the object constructor
+ *
+ */
+
+BufferLoader.prototype.load = function() {
+    for (var i = 0; i < this.urlList.length; ++i) {
+        this.loadBuffer(this.urlList[i], i);
     }
+};
 
-    if (typeof window.sessionStorage === "undefined") {
-        Object.defineProperty(window, "sessionStorage", {
-            writable: false,
-            configurable: false,
-            value: new DOMStorage("sessionStorage")
-        });
-        window.sessionStorage.initialize();
-    }
+module.exports = BufferLoader;
+
+});
+
+// file: lib/tizen/plugin/tizen/Camera.js
+define("cordova/plugin/tizen/Camera", function(require, exports, module) {
+
+/*global tizen:false */
+var Camera = require('cordova/plugin/CameraConstants');
+
+
+//console.log("TIZEN CAMERA START");
+
+function cameraMakeReplyCallback(successCallback, errorCallback) {
+    return {
+        onsuccess: function(reply) {
+            if (reply.length > 0) {
+                successCallback(reply[0].value);
+            }
+            else {
+                errorCallback('Picture selection aborted');
+            }
+        },
+        onfail: function() {
+            console.log('The service launch failed');
+        }
+    };
 }
 
-})(window, document);
+module.exports = {
+    takePicture: function(successCallback, errorCallback, args) {
+        var destinationType = args[1],
+            sourceType = args[2],
+            encodingType = args[5],
+            mediaType = args[6];
 
-module.exports = null;
+        // Not supported
+        /*
+        quality = args[0]
+        targetWidth = args[3]
+        targetHeight = args[4]
+        allowEdit = args[7]
+        correctOrientation = args[8]
+        saveToPhotoAlbum = args[9]
+        */
+
+        if (destinationType !== Camera.DestinationType.FILE_URI) {
+            errorCallback('DestinationType not supported');
+            return;
+        }
+
+        if (mediaType !== Camera.MediaType.PICTURE) {
+            errorCallback('MediaType not supported');
+            return;
+        }
+
+        var mimeType;
+        if (encodingType === Camera.EncodingType.JPEG) {
+            mimeType = 'image/jpeg';
+        }
+        else if (encodingType === Camera.EncodingType.PNG) {
+            mimeType = 'image/png';
+        }
+        else {
+            mimeType = 'image/*';
+        }
+
+        var serviceId;
+        if (sourceType === Camera.PictureSourceType.CAMERA) {
+            serviceId = 'http://tizen.org/appcontrol/operation/create_content';
+        }
+        else {
+            serviceId = 'http://tizen.org/appcontrol/operation/pick';
+        }
+
+        var serviceControl = new tizen.ApplicationControl(
+                            serviceId,
+                            null,
+                            mimeType,
+                            null);
+
+        tizen.application.launchAppControl(
+                serviceControl,
+                null,
+                null,
+                function(error) {
+                    errorCallback(error.message);
+                },
+                cameraMakeReplyCallback(successCallback, errorCallback)
+        );
+    }
+};
+
+//console.log("TIZEN CAMERA END");
 
 });
 
-// file: lib\windowsphone\plugin\windowsphone\FileTransfer.js
-define("cordova/plugin/windowsphone/FileTransfer", function(require, exports, module) {
+// file: lib/tizen/plugin/tizen/Compass.js
+define("cordova/plugin/tizen/Compass", function(require, exports, module) {
 
-var exec = require('cordova/exec'),
-    FileTransferError = require('cordova/plugin/FileTransferError');
+var CompassError = require('cordova/plugin/CompassError'),
+    CompassHeading = require('cordova/plugin/CompassHeading');
 
-// Note that the only difference between this and the default implementation is the
-// object literal passed to exec() in upload - jm
+var compassCallback = null,
+    compassReady = false;
 
-/**
- * FileTransfer uploads a file to a remote server.
- * @constructor
- */
-var FileTransfer = function() {};
+//console.log("TIZEN COMPASS START");
 
-/**
-* Given an absolute file path, uploads a file on the device to a remote server
-* using a multipart HTTP request.
-* @param filePath {String}           Full path of the file on the device
-* @param server {String}             URL of the server to receive the file
-* @param successCallback (Function}  Callback to be invoked when upload has completed
-* @param errorCallback {Function}    Callback to be invoked upon error
-* @param options {FileUploadOptions} Optional parameters such as file name and mimetype
-* @param trustAllHosts {Boolean} Optional trust all hosts (e.g. for self-signed certs), defaults to false
-*/
+module.exports = {
+    getHeading: function(successCallback, errorCallback) {
 
-FileTransfer.prototype.upload = function(filePath, server, successCallback, errorCallback, options, trustAllHosts) {
+        if (window.DeviceOrientationEvent !== undefined) {
 
-    // sanity parameter checking
-    if (!filePath || !server) throw new Error("FileTransfer.upload requires filePath and server URL parameters at the minimum.");
-    // check for options
-    var fileKey = null;
-    var fileName = null;
-    var mimeType = null;
-    var params = null;
-    var chunkedMode = true;
+            compassCallback = function (orientation) {
+                var heading = 360 - orientation.alpha;
 
-    if (options) {
-        fileKey = options.fileKey;
-        fileName = options.fileName;
-        mimeType = options.mimeType;
-        if (options.chunkedMode !== null || typeof options.chunkedMode != "undefined") {
-            chunkedMode = options.chunkedMode;
+                if (compassReady) {
+                    successCallback( new CompassHeading (heading, heading, 0, 0));
+                    window.removeEventListener("deviceorientation", compassCallback, true);
+                }
+                compassReady = true;
+            };
+            compassReady = false; // workaround invalid first event value returned by WRT
+            window.addEventListener("deviceorientation", compassCallback, true);
         }
+        else {
+            errorCallback(CompassError.COMPASS_NOT_SUPPORTED);
+        }
+    }
+};
 
-        // if options are specified, and NOT a string already, we will stringify it.
-        if(options.params && typeof options.params != typeof "") {
-            var arrParams = [];
-            for(var v in options.params) {
-                arrParams.push(v + "=" + options.params[v]);
-            }
-            params = encodeURI(arrParams.join("&"));
+//console.log("TIZEN COMPASS END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/Contact.js
+define("cordova/plugin/tizen/Contact", function(require, exports, module) {
+
+/*global tizen:false */
+//var ContactError = require('cordova/plugin/ContactError'),
+//    ContactUtils = require('cordova/plugin/tizen/ContactUtils');
+
+// ------------------
+// Utility functions
+// ------------------
+
+
+//console.log("TIZEN CONTACT START");
+
+
+var ContactError = require('cordova/plugin/ContactError'),
+    ContactUtils = require('cordova/plugin/tizen/ContactUtils'),
+    utils = require('cordova/utils'),
+    exec = require('cordova/exec');
+
+
+
+/**
+ * Retrieves a Tizen Contact object from the device by its unique id.
+ *
+ * @param uid
+ *            Unique id of the contact on the device
+ * @return {tizen.Contact} Tizen Contact object or null if contact with
+ *         specified id is not found
+ */
+var findByUniqueId = function(id) {
+
+    if (!id) {
+        return null;
+    }
+
+    var tizenContact = null;
+
+    tizen.contact.getDefaultAddressBook().find(
+        function _successCallback(contacts){
+            tizenContact = contacts[0];
+        },
+        function _errorCallback(error){
+            console.log("tizen find error " + error);
+        },
+        new tizen.AttributeFilter('id', 'CONTAINS', id),
+        new tizen.SortMode('id', 'ASC'));
+
+    return tizenContact || null;
+};
+
+
+var traceTizenContact = function (tizenContact) {
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.id " + tizenContact.id);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.personId " + tizenContact.personId);     //Tizen 2.0
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.addressBookId " + tizenContact.addressBookId);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.lastUpdated " + tizenContact.lastUpdated);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.isFavorite " + tizenContact.isFavorite);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.name " + tizenContact.name);
+
+    //console.log("cordova/plugin/tizen/Contact/  tizenContact.account " + tizenContact.account);  //Tizen 2.0
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.addresses " + tizenContact.addresses);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.photoURI " + tizenContact.photoURI);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.phoneNumbers " + tizenContact.phoneNumbers);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.emails " + tizenContact.emails);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.birthday " + tizenContact.birthday);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.anniversaries " + tizenContact.anniversaries);
+
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.organizations " + tizenContact.organizations);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.notes " + tizenContact.notes);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.urls " + tizenContact.urls);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.ringtonesURI " + tizenContact.ringtonesURI);
+    console.log("cordova/plugin/tizen/Contact/  tizenContact.groupIds " + tizenContact.groupIds);    //Tizen 2.0
+
+    //console.log("cordova/plugin/tizen/Contact/  tizenContact.categories " + tizenContact.categories);  //Tizen 2.0
+};
+
+
+/**
+ * Creates a Tizen contact object from the W3C Contact object and persists
+ * it to device storage.
+ *
+ * @param {Contact}
+ *            contact The contact to save
+ * @return a new contact object with all properties set
+ */
+var saveToDevice = function(contact) {
+
+    if (!contact) {
+        return;
+    }
+
+    var tizenContact = null;
+    var update = false;
+    var i = 0;
+
+    // if the underlying Tizen Contact object already exists, retrieve it for
+    // update
+    if (contact.id) {
+        // we must attempt to retrieve the BlackBerry contact from the device
+        // because this may be an update operation
+        tizenContact = findByUniqueId(contact.id);
+    }
+
+    // contact not found on device, create a new one
+    if (!tizenContact) {
+        tizenContact = new tizen.Contact();
+    }
+    // update the existing contact
+    else {
+        update = true;
+    }
+
+    // NOTE: The user may be working with a partial Contact object, because only
+    // user-specified Contact fields are returned from a find operation (blame
+    // the W3C spec). If this is an update to an existing Contact, we don't
+    // want to clear an attribute from the contact database simply because the
+    // Contact object that the user passed in contains a null value for that
+    // attribute. So we only copy the non-null Contact attributes to the
+    // Tizen Contact object before saving.
+    //
+    // This means that a user must explicitly set a Contact attribute to a
+    // non-null value in order to update it in the contact database.
+    //
+    traceTizenContact (tizenContact);
+
+    // display name
+    if (contact.displayName !== null) {
+        if (tizenContact.name === null) {
+            tizenContact.name = new tizen.ContactName();
+        }
+        if (tizenContact.name !== null) {
+            tizenContact.name.displayName = contact.displayName;
         }
     }
 
-    var fail = function(e) {
-        var error = new FileTransferError(e.code, e.source, e.target, e.http_status);
-        errorCallback(error);
-    };
-    exec(successCallback, fail, 'FileTransfer', 'upload', [{"filePath":filePath,
-                                                              "server":server,
-                                                              "fileKey":fileKey,
-                                                              "fileName":fileName,
-                                                              "mimeType":mimeType,
-                                                              "params":params,
-                                                              "trustAllHosts":trustAllHosts,
-                                                              "chunkedMode":chunkedMode}]);
-};
-
-/**
- * Downloads a file form a given URL and saves it to the specified directory.
- * @param source {String}          URL of the server to receive the file
- * @param target {String}         Full path of the file on the device
- * @param successCallback (Function}  Callback to be invoked when upload has completed
- * @param errorCallback {Function}    Callback to be invoked upon error
- */
-
-FileTransfer.prototype.download = function(source, target, successCallback, errorCallback) {
-    // sanity parameter checking
-    if (!source || !target) throw new Error("FileTransfer.download requires source URI and target URI parameters at the minimum.");
-    var win = function(result) {
-        var entry = null;
-        if (result.isDirectory) {
-            entry = new (require('cordova/plugin/DirectoryEntry'))();
+    // name
+    if (contact.name !== null) {
+        if (contact.name.givenName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.firstName = contact.name.givenName;
+            }
         }
-        else if (result.isFile) {
-            entry = new (require('cordova/plugin/FileEntry'))();
+
+        if  (contact.name.middleName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.middleName = contact.name.middleName;
+            }
         }
-        entry.isDirectory = result.isDirectory;
-        entry.isFile = result.isFile;
-        entry.name = result.name;
-        entry.fullPath = result.fullPath;
-        successCallback(entry);
-    };
 
-    var fail = function(e) {
-        var error = new FileTransferError(e.code, e.source, e.target, e.http_status);
-        errorCallback(error);
-    };
-
-    exec(win, errorCallback, 'FileTransfer', 'download', [source, target]);
-};
-
-
-module.exports = FileTransfer;
-
-});
-
-// file: lib\windowsphone\plugin\windowsphone\FileUploadOptions.js
-define("cordova/plugin/windowsphone/FileUploadOptions", function(require, exports, module) {
-
-/**
- * Options to customize the HTTP request used to upload files.
- * @constructor
- * @param fileKey {String}   Name of file request parameter.
- * @param fileName {String}  Filename to be used by the server. Defaults to image.jpg.
- * @param mimeType {String}  Mimetype of the uploaded file. Defaults to image/jpeg.
- * @param params {Object}    Object with key: value params to send to the server.
- */
-var FileUploadOptions = function(fileKey, fileName, mimeType, params) {
-    this.fileKey = fileKey || null;
-    this.fileName = fileName || null;
-    this.mimeType = mimeType || null;
-
-    if(params && typeof params != typeof "") {
-        var arrParams = [];
-        for(var v in params) {
-            arrParams.push(v + "=" + params[v]);
+        if (contact.name.familyName) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.lastName = contact.name.familyName;
+            }
         }
-        this.params = encodeURIComponent(arrParams.join("&"));
+
+        if (contact.name.honorificPrefix) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.prefix = contact.name.honorificPrefix;
+            }
+        }
+
+        //Tizen 2.0
+        if (contact.name.honorificSuffix) {
+            if (tizenContact.name === null) {
+                tizenContact.name = new tizen.ContactName();
+            }
+            if (tizenContact.name !== null) {
+                tizenContact.name.suffix = contact.name.honorificSuffix;
+            }
+        }
+    }
+
+    // nickname
+    if (contact.nickname !== null) {
+        if (tizenContact.name === null) {
+            tizenContact.name = new tizen.ContactName();
+        }
+        if (tizenContact.name !== null) {
+            if (!utils.isArray(tizenContact.name.nicknames))
+            {
+                tizenContact.name.nicknames = [];
+            }
+            tizenContact.name.nicknames[0] = contact.nickname;
+        }
     }
     else {
-        this.params = params || null;
+        tizenContact.name.nicknames = [];
+    }
+
+    // notes - Tizen 2.0 (was note)
+    if (contact.note !== null) {
+        if (tizenContact.notes === null) {
+            tizenContact.notes = [];
+        }
+        if (tizenContact.notes !== null) {
+            tizenContact.notes[0] = contact.note;
+        }
+    }
+
+    // photos
+    if (contact.photos && utils.isArray(contact.photos) && contact.photos.length > 0) {
+        tizenContact.photoURI = contact.photos[0];
+    }
+
+    if (utils.isDate(contact.birthday)) {
+        if (!utils.isDate(tizenContact.birthday)) {
+            tizenContact.birthday = new Date();
+        }
+        if (utils.isDate(tizenContact.birthday)) {
+            tizenContact.birthday.setDate(contact.birthday.getDate());
+        }
+    }
+
+    // Tizen supports many email addresses
+    if (utils.isArray(contact.emails)) {
+
+        // if this is an update, re initialize email addresses
+        if (update) {
+            // doit on effacer sur un update??????
+        }
+
+        // copy the first three email addresses found
+        var emails = [];
+        for (i = 0; i < contact.emails.length; i += 1) {
+            var emailTypes = [];
+
+            emailTypes.push (contact.emails[i].type);
+
+            emails.push(
+                new tizen.ContactEmailAddress(
+                    contact.emails[i].value,
+                    emailTypes,
+                    contact.emails[i].pref));    //Tizen 2.0
+
+        }
+        tizenContact.emails = emails.length > 0 ? emails : [];
+    }
+    else {
+        tizenContact.emails = [];
+    }
+
+    // Tizen supports many phone numbers
+    // copy into appropriate fields based on type
+    if (utils.isArray(contact.phoneNumbers)) {
+        // if this is an update, re-initialize phone numbers
+        if (update) {
+        }
+
+        var phoneNumbers = [];
+
+        for (i = 0; i < contact.phoneNumbers.length; i += 1) {
+
+            if (!contact.phoneNumbers[i]) {
+                continue;
+            }
+
+            var phoneTypes = [];
+            phoneTypes.push (contact.phoneNumbers[i].type);
+
+
+            phoneNumbers.push(
+                new tizen.ContactPhoneNumber(
+                    contact.phoneNumbers[i].value,
+                    phoneTypes,
+                    contact.phoneNumbers[i].pref)    //Tizen 2.0
+            );
+        }
+
+        tizenContact.phoneNumbers = phoneNumbers.length > 0 ? phoneNumbers : [];
+    }
+    else {
+        tizenContact.phoneNumbers = [];
+    }
+
+    if (utils.isArray(contact.addresses)) {
+        // if this is an update, re-initialize addresses
+        if (update) {
+        }
+
+        var addresses = [],
+            address = null;
+
+        for ( i = 0; i < contact.addresses.length; i += 1) {
+            address = contact.addresses[i];
+
+            if (!address) {
+                continue;
+            }
+
+            var addressTypes = [];
+            addressTypes.push (address.type);
+
+            addresses.push(
+                new tizen.ContactAddress({
+                    country:                   address.country,
+                    region :                   address.region,
+                    city:                      address.locality,
+                    streetAddress:             address.streetAddress,
+                    additionalInformation:     "",
+                    postalCode:                address.postalCode,
+                    isDefault:                 address.pref, //Tizen 2.0
+                    types :                    addressTypes
+                })
+            );
+
+        }
+        tizenContact.addresses = addresses.length > 0 ? addresses : [];
+
+    }
+    else{
+        tizenContact.addresses = [];
+    }
+
+    // copy first url found to cordova 'urls' field
+    if (utils.isArray(contact.urls)) {
+        // if this is an update, re-initialize web page
+        if (update) {
+        }
+
+        var url = null,
+            urls = [];
+
+        for ( i = 0; i< contact.urls.length; i+= 1) {
+            url = contact.urls[i];
+
+            if (!url || !url.value) {
+                continue;
+            }
+
+            urls.push( new tizen.ContactWebSite(url.value, url.type));
+        }
+        tizenContact.urls = urls.length > 0 ? urls : [];
+    }
+    else{
+        tizenContact.urls = [];
+    }
+
+    if (utils.isArray(contact.organizations) && contact.organizations.length > 0 ) {
+         // if this is an update, re-initialize addresses
+        if (update) {
+        }
+
+        var organizations = [],
+            organization = null;
+
+        for ( i = 0; i < contact.organizations.length; i += 1) {
+            organization = contact.organizations[i];
+
+            if (!organization) {
+                continue;
+            }
+
+            organizations.push(
+                new tizen.ContactOrganization({
+                    name:          organization.name,
+                    department:    organization.department,
+                    title:         organization.title,
+                    role:          "",
+                    logoURI:       ""
+                }));
+
+        }
+        tizenContact.organizations = organizations.length > 0 ? organizations : [];
+
+    }
+    else{
+        tizenContact.organizations = [];
+    }
+
+    // categories
+    if (utils.isArray(contact.categories)) {
+        tizenContact.categories = [];
+
+        var category = null;
+
+        for (i = 0; i < contact.categories.length; i += 1) {
+            category = contact.categories[i];
+
+            if (typeof category === "string") {
+                tizenContact.categories.push(category);
+            }
+        }
+    }
+    else {
+        tizenContact.categories = [];
+    }
+
+    // save to device
+    // in tizen contact mean update or add
+    // later we might use addBatch and updateBatch
+    if (update){
+        tizen.contact.getDefaultAddressBook().update(tizenContact);
+    }
+    else {
+        tizen.contact.getDefaultAddressBook().add(tizenContact);
+    }
+
+    // Use the fully populated Tizen contact object to create a
+    // corresponding W3C contact object.
+    return ContactUtils.createContact(tizenContact, [ "*" ]);
+};
+
+
+/**
+ * Creates a Tizen ContactAddress object from a W3C ContactAddress.
+ *
+ * @return {tizen.ContactAddress} a Tizen ContactAddress object
+ */
+var createTizenAddress = function(address) {
+
+    var type = null,
+        pref = null,
+        typesAr = [];
+
+    if (address === null) {
+        return null;
+    }
+
+    var tizenAddress = new tizen.ContactAddress();
+
+    if (tizenAddress === null) {
+        return null;
+    }
+
+    typesAr.push(address.type);
+
+    tizenAddress.country = address.country || "";
+    tizenAddress.region = address.region || "";
+    tizenAddress.city = address.locality || "";
+    tizenAddress.streetAddress = address.streetAddress || "";
+    tizenAddress.postalCode = address.postalCode || "";
+    tizenAddress.isDefault = address.pref || false;   //Tizen SDK 2.0
+    tizenAddress.types = typesAr || "";
+
+    return tizenAddress;
+};
+
+module.exports = {
+    /**
+     * Persists contact to device storage.
+     */
+
+    save : function(successCB, failCB) {
+
+        try {
+            // save the contact and store it's unique id
+            var fullContact = saveToDevice(this);
+
+            this.id = fullContact.id;
+
+            // This contact object may only have a subset of properties
+            // if the save was an update of an existing contact. This is
+            // because the existing contact was likely retrieved using a
+            // subset of properties, so only those properties were set in the
+            // object. For this reason, invoke success with the contact object
+            // returned by saveToDevice since it is fully populated.
+
+            if (typeof successCB === 'function') {
+                successCB(fullContact);
+            }
+        }
+        catch (error) {
+            console.log('Error saving contact: ' +  error);
+
+            if (typeof failCB === 'function') {
+                failCB (new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
+    },
+
+    /**
+     * Removes contact from device storage.
+     *
+     * @param successCB
+     *            successCB callback
+     * @param failCB
+     *            error callback
+     */
+    remove : function (successCB, failCB) {
+
+        try {
+            // retrieve contact from device by id
+            var tizenContact = null;
+
+            if (this.id) {
+                tizenContact = findByUniqueId(this.id);
+            }
+
+            // if contact was found, remove it
+            if (tizenContact) {
+                //var addressBook =  tizen.contact.getDefaultAddressBook();
+                var addressBook =  tizen.contact.getAddressBook(tizenContact.addressBookId);   //Tizen SDk 2.0
+
+                addressBook.remove(tizenContact.id);
+
+                if (typeof success === 'function') {
+                    successCB(this);
+                }
+            }
+            // attempting to remove a contact that hasn't been saved
+            else if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
+        catch (error) {
+            console.log('Error removing contact ' + this.id + ": " + error);
+            if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.UNKNOWN_ERROR));
+            }
+        }
     }
 };
 
-module.exports = FileUploadOptions;
+//console.log("TIZEN CONTACT END");
 
 });
 
-// file: lib\windowsphone\plugin\windowsphone\XHRPatch\plugininit.js
-define("cordova/plugin/windowsphone/XHRPatch/plugininit", function(require, exports, module) {
+// file: lib/tizen/plugin/tizen/ContactUtils.js
+define("cordova/plugin/tizen/ContactUtils", function(require, exports, module) {
 
-// TODO: the build process will implicitly wrap this in a define() call
-// with a closure of its own; do you need this extra closure?
+/*global tizen:false */
+var Contact = require('cordova/plugin/Contact'),
+    ContactAddress = require('cordova/plugin/ContactAddress'),
+    ContactName = require('cordova/plugin/ContactName'),
+    ContactField = require('cordova/plugin/ContactField'),
+    ContactOrganization = require('cordova/plugin/ContactOrganization'),
+    utils = require('cordova/utils');
 
-var LocalFileSystem = require('cordova/plugin/LocalFileSystem');
 
-(function (win, doc) {
 
-var docDomain = null;
-try {
-    docDomain = doc.domain;
-} catch (err) {
-    //console.log("caught exception trying to access document.domain");
+/**
+ * Mappings for each Contact field that may be used in a find operation. Maps
+ * W3C Contact fields to one or more fields in a Tizen contact object.
+ *
+ * Example: user searches with a filter on the Contact 'name' field:
+ *
+ * <code>Contacts.find(['name'], onSuccess, onFail, {filter:'Bob'});</code>
+ *
+ * The 'name' field does not exist in a Tizen contact. Instead, a filter
+ * expression will be built to search the Tizen contacts using the
+ * Tizen 'title', 'firstName' and 'lastName' fields.
+ */
+var fieldMappings = {
+    "id" : ["id"],
+    "displayName" : ["name.displayName"],
+    "nickname": ["name.nicknames"],
+    "name" : [ "name.prefix", "name.firstName", "name.lastName" ],
+    "phoneNumbers" : ["phoneNumbers.number","phoneNumbers.types"],
+    "emails" : ["emails.types", "emails.email"],
+    "addresses" : ["addresses.country","addresses.region","addresses.city","addresses.streetAddress","addresses.postalCode","addresses.country","addresses.types"],
+    "organizations" : ["organizations.name","organizations.department","organizations.office", "organizations.title"],
+    "birthday" : ["birthday"],
+    "note" : ["notes"],
+    "photos" : ["photoURI"],
+    "urls" : ["urls.url", "urls.type"]
+};
+
+/*
+ * Build an array of all of the valid W3C Contact fields. This is used to
+ * substitute all the fields when ["*"] is specified.
+ */
+var allFields = [];
+
+(function() {
+    for ( var key in fieldMappings) {
+        allFields.push(key);
+    }
+})();
+
+/**
+ * Create a W3C ContactAddress object from a Tizen Address object
+ *
+ * @param {String}
+ *            type the type of address (e.g. work, home)
+ * @param {tizen.ContactAddress}
+ *            tizenAddress a Tizen Address object
+ * @return {ContactAddress} a contact address object or null if the specified
+ *         address is null
+ */
+var createContactAddress = function(type, tizenAddress) {
+    if (!tizenAddress) {
+        return null;
+    }
+
+    var isDefault = tizenAddress.isDefault;            //Tizen 2.0
+    var streetAddress = tizenAddress.streetAddress;
+    var locality = tizenAddress.city || "";
+    var region = tizenAddress.region || "";
+    var postalCode = tizenAddress.postalCode || "";
+    var country = tizenAddress.country || "";
+
+    //TODO improve formatted
+    var formatted = streetAddress + ", " + locality + ", " + region + ", " + postalCode + ", " + country;
+
+    var contact = new ContactAddress(isDefault, type, formatted, streetAddress, locality, region, postalCode, country);
+
+    return contact;
+};
+
+module.exports = {
+    /**
+     * Builds Tizen filter expressions for contact search using the
+     * contact fields and search filter provided.
+     *
+     * @param {String[]}
+     *            fields Array of Contact fields to search
+     * @param {String}
+     *            filter Filter, or search string
+     * @param {Boolean}
+     *                 multiple, one contacts or more wanted as result
+     * @return filter expression or null if fields is empty or filter is null or
+     *         empty
+     */
+
+    buildFilterExpression: function(fields, filter) {
+        // ensure filter exists
+        if (!filter || filter === "") {
+            return null;
+        }
+
+        if ((fields.length === 1) && (fields[0] === "*")) {
+            // Cordova enhancement to allow fields value of ["*"] to indicate
+            // all supported fields.
+            fields = allFields;
+        }
+
+        // build a filter expression using all Contact fields provided
+        var compositeFilter = null,
+            attributeFilter = null,
+            filterExpression = null,
+            matchFlag = "CONTAINS",
+            matchValue = filter,
+            attributesArray = [];
+
+        if (fields && utils.isArray(fields)) {
+
+            for ( var field in fields) {
+
+                if (!fields[field]) {
+                    continue;
+                }
+
+                // retrieve Tizen contact fields that map Cordova fields specified
+                // (tizenFields is a string or an array of strings)
+                var tizenFields = fieldMappings[fields[field]];
+
+                if (!tizenFields) {
+                    // does something maps
+                    continue;
+                }
+
+                // construct the filter expression using the Tizen fields
+                for ( var index in tizenFields) {
+                    attributeFilter = new tizen.AttributeFilter(tizenFields[index], matchFlag, matchValue);
+                    if (attributeFilter !== null) {
+                        attributesArray.push(attributeFilter);
+                    }
+                }
+            }
+        }
+
+        // fulfill Tizen find attribute as a single or a composite attribute
+        if (attributesArray.length == 1 ) {
+            filterExpression = attributeFilter[0];
+        } else if (attributesArray.length > 1) {
+            // combine the filters as a Union
+            filterExpression = new tizen.CompositeFilter("UNION", attributesArray);
+        } else {
+            filterExpression = null;
+        }
+
+        return filterExpression;
+    },
+
+
+    /**
+     * Creates a Contact object from a Tizen Contact object, copying only
+     * the fields specified.
+     *
+     * This is intended as a privately used function but it is made globally
+     * available so that a Contact.save can convert a BlackBerry contact object
+     * into its W3C equivalent.
+     *
+     * @param {tizen.Contact}
+     *            tizenContact Tizen Contact object
+     * @param {String[]}
+     *            fields array of contact fields that should be copied
+     * @return {Contact} a contact object containing the specified fields or
+     *         null if the specified contact is null
+     */
+    createContact: function(tizenContact, fields) {
+
+        if (!tizenContact) {
+            return null;
+        }
+
+        // construct a new contact object
+        // always copy the contact id and displayName fields
+        var contact = new Contact(tizenContact.id, tizenContact.name.displayName);
+
+
+        // nothing to do
+        if (!fields || !(utils.isArray(fields)) || fields.length === 0) {
+            return contact;
+        }
+        else if (fields.length === 1 && fields[0] === "*") {
+            // Cordova enhancement to allow fields value of ["*"] to indicate
+            // all supported fields.
+            fields = allFields;
+        }
+
+        // add the fields specified
+        for ( var key in fields) {
+
+            var field = fields[key],
+                index = 0;
+
+            if (!field) {
+                continue;
+            }
+
+            // name
+            if (field.indexOf('name') === 0) {
+                var formattedName = (tizenContact.name.prefix || "");
+
+                if (tizenContact.name.firstName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.firstName || "");
+                }
+
+                if (tizenContact.name.middleName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.middleName || "");
+                }
+
+                if (tizenContact.name.lastName) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.lastName || "");
+                }
+
+                //Tizen 2.0
+                if (tizenContact.name.suffix) {
+                    formattedName += ' ';
+                    formattedName += (tizenContact.name.suffix || "");
+                }
+
+                contact.name = new ContactName(
+                        formattedName,
+                        tizenContact.name.lastName,
+                        tizenContact.name.firstName,
+                        tizenContact.name.middleName,
+                        tizenContact.name.prefix,
+                        tizenContact.name.suffix);
+            }
+            // phoneNumbers - Tizen 2.0
+            else if (field.indexOf('phoneNumbers') === 0) {
+                var phoneNumbers = [];
+
+                for (index = 0 ; index < tizenContact.phoneNumbers.length ; ++index) {
+                    phoneNumbers.push(
+                        new ContactField(
+                            'PHONE',
+                            tizenContact.phoneNumbers[index].number,
+                            tizenContact.phoneNumbers[index].isDefault));
+                }
+                contact.phoneNumbers = phoneNumbers.length > 0 ? phoneNumbers : null;
+            }
+
+            // emails - Tizen 2.0
+            else if (field.indexOf('emails') === 0) {
+                var emails = [];
+
+                for (index = 0 ; index < tizenContact.emails.length ; ++index) {
+                    emails.push(
+                        new ContactField(
+                            'EMAILS',
+                            tizenContact.emails[index].email,
+                            tizenContact.emails[index].isDefault));
+                }
+                contact.emails = emails.length > 0 ? emails : null;
+            }
+
+            // addresses Tizen 2.0
+            else if (field.indexOf('addresses') === 0) {
+                var addresses = [];
+
+                for (index = 0 ; index < tizenContact.addresses.length ; ++index) {
+                    addresses.push(
+                         new ContactAddress(
+                            tizenContact.addresses[index].isDefault,
+                            tizenContact.addresses[index].types[0] ? tizenContact.addresses[index].types[0] : "HOME",
+                            null,
+                            tizenContact.addresses[index].streetAddress,
+                            tizenContact.addresses[index].city,
+                            tizenContact.addresses[index].region,
+                            tizenContact.addresses[index].postalCode,
+                            tizenContact.addresses[index].country ));
+                }
+                contact.addresses = addresses.length > 0 ? addresses : null;
+            }
+
+            // birthday
+            else if (field.indexOf('birthday') === 0) {
+                if (utils.isDate(tizenContact.birthday)) {
+                    contact.birthday = tizenContact.birthday;
+                }
+            }
+
+            // note only one in Tizen Contact -Tizen 2.0
+            else if (field.indexOf('note') === 0) {
+                if (tizenContact.notes) {
+                    contact.note = tizenContact.notes[0];
+                }
+            }
+            // organizations Tizen 2.0
+            else if (field.indexOf('organizations') === 0) {
+                var organizations = [];
+
+                for (index = 0 ; index < tizenContact.organizations.length ; ++index) {
+                    organizations.push(
+                            new ContactOrganization(
+                                    (index === 0),
+                                    'WORK',
+                                    tizenContact.organizations.name,
+                                    tizenContact.organizations.department,
+                                    tizenContact.organizations.jobTitle));
+                }
+                contact.organizations = organizations.length > 0 ? organizations : null;
+            }
+
+            // urls
+            else if (field.indexOf('urls') === 0) {
+                var urls = [];
+
+                if (tizenContact.urls) {
+                    for (index = 0 ; index <tizenContact.urls.length ; ++index) {
+                        urls.push(
+                                new ContactField(
+                                        tizenContact.urls[index].type,
+                                        tizenContact.urls[index].url,
+                                        (index === 0)));
+                    }
+                }
+                contact.urls = urls.length > 0 ? urls : null;
+            }
+
+            // photos
+            else if (field.indexOf('photos') === 0) {
+                var photos = [];
+
+                if (tizenContact.photoURI) {
+                    photos.push(new ContactField('URI', tizenContact.photoURI, true));
+                }
+                contact.photos = photos.length > 0 ? photos : null;
+            }
+        }
+
+        return contact;
+    }
+};
+
+});
+
+// file: lib/tizen/plugin/tizen/Device.js
+define("cordova/plugin/tizen/Device", function(require, exports, module) {
+
+/*global tizen:false */
+var channel = require('cordova/channel');
+
+//console.log("TIZEN DEVICE START");
+
+
+// Tell cordova channel to wait on the CordovaInfoReady event - PPL is this useful?
+//channel.waitForInitialization('onCordovaInfoReady');
+
+function Device() {
+    this.version = "2.1.0"; // waiting a working solution of the security error see below
+    this.uuid = null;
+    this.model = null;
+    this.cordova = CORDOVA_JS_BUILD_LABEL;
+    this.platform = "Tizen";
+   
+    this.getDeviceInfo();
 }
 
-if (!docDomain || docDomain.length === 0) {
+Device.prototype.getDeviceInfo = function() {
 
-    var aliasXHR = win.XMLHttpRequest;
+    var deviceCapabilities =  tizen.systeminfo.getCapabilities();
 
-    win.XMLHttpRequest = function () { };
-    win.XMLHttpRequest.noConflict = aliasXHR;
-    win.XMLHttpRequest.UNSENT = 0;
-    win.XMLHttpRequest.OPENED = 1;
-    win.XMLHttpRequest.HEADERS_RECEIVED = 2;
-    win.XMLHttpRequest.LOADING = 3;
-    win.XMLHttpRequest.DONE = 4;
-
-    win.XMLHttpRequest.prototype = {
-        UNSENT: 0,
-        OPENED: 1,
-        HEADERS_RECEIVED: 2,
-        LOADING: 3,
-        DONE: 4,
-
-        isAsync: false,
-        onreadystatechange: null,
-        readyState: 0,
-        _url: "",
-        timeout: 0,
-        withCredentials: false,
-        _requestHeaders: null,
-        open: function (reqType, uri, isAsync, user, password) {
-
-            if (uri && uri.indexOf("http") === 0) {
-                if (!this.wrappedXHR) {
-                    this.wrappedXHR = new aliasXHR();
-                    var self = this;
-
-                    // timeout
-                    if (this.timeout > 0) {
-                        this.wrappedXHR.timeout = this.timeout;
-                    }
-                    Object.defineProperty(this, "timeout", {
-                        set: function (val) {
-                            this.wrappedXHR.timeout = val;
-                        },
-                        get: function () {
-                            return this.wrappedXHR.timeout;
-                        }
-                    });
-
-
-
-                    if (this.withCredentials) {
-                        this.wrappedXHR.withCredentials = this.withCredentials;
-                    }
-                    Object.defineProperty(this, "withCredentials", {
-                        set: function (val) {
-                            this.wrappedXHR.withCredentials = val;
-                        },
-                        get: function () {
-                            return this.wrappedXHR.withCredentials;
-                        }
-                    });
-
-
-                    Object.defineProperty(this, "status", { get: function () {
-                        return this.wrappedXHR.status;
-                    }
-                    });
-                    Object.defineProperty(this, "responseText", { get: function () {
-                        return this.wrappedXHR.responseText;
-                    }
-                    });
-                    Object.defineProperty(this, "statusText", { get: function () {
-                        return this.wrappedXHR.statusText;
-                    }
-                    });
-
-                    Object.defineProperty(this, "responseXML", { get: function () {
-                        return this.wrappedXHR.responseXML;
-                    }
-                    });
-
-                    this.getResponseHeader = function (header) {
-                        return this.wrappedXHR.getResponseHeader(header);
-                    };
-                    this.getAllResponseHeaders = function () {
-                        return this.wrappedXHR.getAllResponseHeaders();
-                    };
-
-                    this.wrappedXHR.onreadystatechange = function () {
-                        self.changeReadyState(self.wrappedXHR.readyState);
-                    };
-                }
-                return this.wrappedXHR.open(reqType, uri, isAsync, user, password);
-            }
-            else {
-                // x-wmapp1://app/www/page2.html
-                // need to work some magic on the actual url/filepath
-                var newUrl = uri;
-                if (newUrl.indexOf(":/") > -1) {
-                    newUrl = newUrl.split(":/")[1];
-                }
-                // prefix relative urls to our physical root
-                if(newUrl.indexOf("app/www/") < 0 && this.getContentLocation() == this.contentLocation.ISOLATED_STORAGE)
-                {
-                    newUrl = "app/www/" + newUrl;
-                }
-
-                if (newUrl.lastIndexOf("/") === newUrl.length - 1) {
-                    newUrl += "index.html"; // default page is index.html, when call is to a dir/ ( why not ...? )
-                }
-                this._url = newUrl;
-            }
-        },
-        statusText: "",
-        changeReadyState: function (newState) {
-            this.readyState = newState;
-            if (this.onreadystatechange) {
-                this.onreadystatechange();
-            }
-        },
-        setRequestHeader: function (header, value) {
-            if (this.wrappedXHR) {
-                this.wrappedXHR.setRequestHeader(header, value);
-            }
-        },
-        getResponseHeader: function (header) {
-            return this.wrappedXHR ? this.wrappedXHR.getResponseHeader(header) : "";
-        },
-        getAllResponseHeaders: function () {
-            return this.wrappedXHR ? this.wrappedXHR.getAllResponseHeaders() : "";
-        },
-        responseText: "",
-        responseXML: "",
-        onResult: function (res) {
-            this.status = 200;
-            if(typeof res == "object")
-            {   // callback result handler may have already parsed this from a string-> a JSON object,
-                // if so, we need to restore its stringyness, as handlers are expecting string data.
-                // especially if used with jQ -> $.getJSON
-                res = JSON.stringify(res);
-            }
-            this.responseText = res;
-            this.responseXML = res;
-            this.changeReadyState(this.DONE);
-        },
-        onError: function (err) {
-            this.status = 404;
-            this.changeReadyState(this.DONE);
-        },
-
-        abort: function () {
-            if (this.wrappedXHR) {
-                return this.wrappedXHR.abort();
-            }
-        },
-
-        send: function (data) {
-            if (this.wrappedXHR) {
-                return this.wrappedXHR.send(data);
-            }
-            else {
-                this.changeReadyState(this.OPENED);
-
-                var alias = this;
-
-                var fail = function fail(evt) {
-                    alias.onError(evt.code);
-                };
-
-                if (alias.getContentLocation() == this.contentLocation.RESOURCES) {
-                    var exec = require('cordova/exec');
-                    exec(function(result) {
-                            alias.onResult.apply(alias, [result]);
-                        },
-                        fail,
-                        "File", "readResourceAsText", [alias._url]
-                    );
-                }
-                else {
-                    var gotFile = function gotFile(file) {
-                        var reader = new FileReader();
-                        reader.onloadend = function (evt) {
-                            alias.onResult.apply(alias,[evt.target.result]);
-                        };
-                        reader.readAsText(file);
-                    };
-
-                    var gotEntry = function gotEntry(entry) {
-                        entry.file(gotFile, fail);
-                    };
-
-                    var gotFS = function gotFS(fs) {
-                        fs.root.getFile(alias._url, null, gotEntry, fail);
-                    };
-
-                    window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, gotFS, fail);
-                }
-            }
-        },
-
-        getContentLocation: function () {
-            if (window.contentLocation === undefined) {
-                window.contentLocation = (navigator.userAgent.toUpperCase().indexOf('MSIE 10') > -1) ?
-                    this.contentLocation.RESOURCES : this.contentLocation.ISOLATED_STORAGE;
-            }
-
-            return window.contentLocation;
-        },
-
-        contentLocation:{
-            ISOLATED_STORAGE: 0,
-            RESOURCES: 1
-        },
-
-        status: 404
-    };
-} // if doc domain
-
-// end closure wrap
-})(window, document);
-
-module.exports = null;
-
-});
-
-// file: lib\windowsphone\plugin\windowsphone\console.js
-define("cordova/plugin/windowsphone/console", function(require, exports, module) {
-
-
-var exec = require('cordova/exec'),
-    channel = require('cordova/channel');
-var cordova = require("cordova");
-
-var debugConsole = {
-    log:function(msg){
-        exec(null,null,"DebugConsole","log",msg);
-    },
-    warn:function(msg){
-        exec(null,null,"DebugConsole","warn",msg);
-    },
-    error:function(msg){
-        exec(null,null,"DebugConsole","error",msg);
+    if (deviceCapabilities) {
+        this.version = deviceCapabilities.platformVersion; // requires http://tizen.org/privilege/system  (and not "systeminfo")  privileges to be added in config.xml
+        this.uuid = deviceCapabilities.duid;
+        this.model = deviceCapabilities.platformName;
+        
+        channel.onCordovaInfoReady.fire();
+    }
+    else {
+        console.log("error initializing cordova: ");
     }
 };
 
-var oldOnError = window.onerror;
-window.onerror = function(msg,fileName,line) {
-    oldOnError && oldOnError(msg,fileName,line);
-    debugConsole.error(msg + " file:" + fileName + " Line:" + line);
-};
+module.exports = new Device();
 
-module.exports = debugConsole;
+//console.log("TIZEN DEVICE END");
+
+
 
 });
 
-// file: lib\windowsphone\plugin\windowsphone\console\symbols.js
-define("cordova/plugin/windowsphone/console/symbols", function(require, exports, module) {
+// file: lib/tizen/plugin/tizen/File.js
+define("cordova/plugin/tizen/File", function(require, exports, module) {
 
+
+//console.log("TIZEN FILE START");
+
+/*global WebKitBlobBuilder:false */
+var FileError = require('cordova/plugin/FileError'),
+    DirectoryEntry = require('cordova/plugin/DirectoryEntry'),
+    FileEntry = require('cordova/plugin/FileEntry'),
+    File = require('cordova/plugin/File'),
+    FileSystem = require('cordova/plugin/FileSystem');
+
+var nativeRequestFileSystem = window.webkitRequestFileSystem,
+    nativeResolveLocalFileSystemURI = window.webkitResolveLocalFileSystemURL,
+    NativeFileReader = window.FileReader;
+
+function getFileSystemName(nativeFs) {
+    return (nativeFs.name.indexOf("Persistent") != -1) ? "persistent" : "temporary";
+}
+
+function makeEntry(entry) {
+    if (entry.isDirectory) {
+        return new DirectoryEntry(entry.name, decodeURI(entry.toURL()));
+    }
+    else {
+        return new FileEntry(entry.name, decodeURI(entry.toURL()));
+    }
+}
+
+module.exports = {
+    /* common/equestFileSystem.js, args = [type, size] */
+    requestFileSystem: function(successCallback, errorCallback, args) {
+        var type = args[0],
+            size = args[1];
+
+        nativeRequestFileSystem(
+            type,
+            size,
+            function(nativeFs) {
+                successCallback(new FileSystem(getFileSystemName(nativeFs), makeEntry(nativeFs.root)));
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/resolveLocalFileSystemURI.js, args= [uri] */
+    resolveLocalFileSystemURI: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                successCallback(makeEntry(entry));
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/DirectoryReader.js, args = [this.path] */
+    readEntries: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(dirEntry) {
+                var reader = dirEntry.createReader();
+
+                reader.readEntries(
+                    function(entries) {
+                        var retVal = [];
+                        for (var i = 0; i < entries.length; i++) {
+                            retVal.push(makeEntry(entries[i]));
+                        }
+                        successCallback(retVal);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/Entry.js , args = [this.fullPath] */
+    getMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getMetadata(
+                    function(metaData) {
+                        successCallback(metaData.modificationTime);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath, metadataObject] */
+    /* PPL to be implemented */
+    setMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            metadata = args[1];
+
+        if (errorCallback) {
+            errorCallback(FileError.NOT_FOUND_ERR);
+        }
+    },
+
+
+    /* args = [srcPath, parent.fullPath, name] */
+    moveTo: function(successCallback, errorCallback, args) {
+        var srcUri = args[0],
+            parentUri = args[1],
+            name = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            srcUri,
+            function(source) {
+                nativeResolveLocalFileSystemURI(
+                    parentUri,
+                    function(parent) {
+                        source.moveTo(
+                            parent,
+                            name,
+                            function(entry) {
+                                successCallback(makeEntry(entry));
+                            },
+                            function(error) {
+                                errorCallback(error.code);
+                            }
+                        );
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [srcPath, parent.fullPath, name] */
+    copyTo: function(successCallback, errorCallback, args) {
+        var srcUri = args[0],
+            parentUri = args[1],
+            name = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            srcUri,
+            function(source) {
+                nativeResolveLocalFileSystemURI(
+                    parentUri,
+                    function(parent) {
+                        source.copyTo(
+                            parent,
+                            name,
+                            function(entry) {
+                                successCallback(makeEntry(entry));
+                            },
+                            function(error) {
+                                errorCallback(error.code);
+                            }
+                        );
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+
+    /* args = [this.fullPath] */
+    remove: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                if (entry.fullPath === "/") {
+                    errorCallback(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                }
+                else {
+                    entry.remove(
+                        successCallback,
+                        function(error) {
+                            errorCallback(error.code);
+                        }
+                    );
+                }
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath] */
+    getParent: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getParent(
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileEntry.js, args = [this.fullPath] */
+    getFileMetadata: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.file(
+                    function(file) {
+                        var retVal = new File(file.name, decodeURI(entry.toURL()), file.type, file.lastModifiedDate, file.size);
+                        successCallback(retVal);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/DirectoryEntry.js , args = [this.fullPath, path, options] */
+    getDirectory: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            path = args[1],
+            options = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getDirectory(
+                    path,
+                    options,
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        if (error.code === FileError.INVALID_MODIFICATION_ERR) {
+                            if (options.create) {
+                                errorCallback(FileError.PATH_EXISTS_ERR);
+                            }
+                            else {
+                                errorCallback(FileError.ENCODING_ERR);
+                            }
+                        }
+                        else {
+                            errorCallback(error.code);
+                        }
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath] */
+    removeRecursively: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                if (entry.fullPath === "/") {
+                    errorCallback(FileError.NO_MODIFICATION_ALLOWED_ERR);
+                }
+                else {
+                    entry.removeRecursively(
+                        successCallback,
+                        function(error) {
+                            errorCallback(error.code);
+                        }
+                    );
+                }
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fullPath, path, options] */
+    getFile: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            path = args[1],
+            options = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                entry.getFile(
+                    path,
+                    options,
+                    function(entry) {
+                        successCallback(makeEntry(entry));
+                    },
+                    function(error) {
+                        if (error.code === FileError.INVALID_MODIFICATION_ERR) {
+                            if (options.create) {
+                                errorCallback(FileError.PATH_EXISTS_ERR);
+                            }
+                            else {
+                                errorCallback(FileError.ENCODING_ERR);
+                            }
+                        }
+                        else {
+                            errorCallback(error.code);
+                        }
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileReader.js, args = execArgs = [filepath, encoding, file.start, file.end] */
+    readAsText: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            encoding = args[1];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsText(file, encoding);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = execArgs = [this._fileName, file.start, file.end] */
+    readAsDataURL: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = execArgs =  [this._fileName, file.start, file.end] */
+    /* PPL, to Be implemented , for now it is pasted from readAsText...*/
+    readAsBinaryString: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+
+    /* args = execArgs =  [this._fileName, file.start, file.end] */
+    /* PPL, to Be implemented , for now it is pasted from readAsText...*/
+    readAsArrayBuffer: function(successCallback, errorCallback, args) {
+        var uri = args[0];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onLoadEnd = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(evt.target.result);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                var reader = new NativeFileReader();
+
+                reader.onloadend = onLoadEnd;
+                reader.onerror = onError;
+
+                entry.file(
+                    function(file) {
+                        reader.readAsDataURL(file);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* common/FileWriter.js, args = [this.fileName, text, this.position] */
+    write: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            text = args[1],
+            position = args[2];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onWriteEnd = function(evt) {
+                        if(!evt.target.error) {
+                            successCallback(evt.target.position - position);
+                        }
+                        else {
+                            errorCallback(evt.target.error.code);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                entry.createWriter(
+                    function(writer) {
+                        var blob = new WebKitBlobBuilder();
+                        blob.append(text);
+
+                        writer.onwriteend = onWriteEnd;
+                        writer.onerror = onError;
+
+                        writer.seek(position);
+                        writer.write(blob.getBlob('text/plain'));
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    },
+
+    /* args = [this.fileName, size] */
+    truncate: function(successCallback, errorCallback, args) {
+        var uri = args[0],
+            size = args[1];
+
+        nativeResolveLocalFileSystemURI(
+            uri,
+            function(entry) {
+                var onWriteEnd = function(evt) {
+                        if(!evt.target.error) {
+                            successCallback(evt.target.length);
+                        }
+                        else {
+                            errorCallback(evt.target.error.code);
+                        }
+                    },
+                    onError = function(evt) {
+                        errorCallback(evt.target.error.code);
+                    };
+
+                entry.createWriter(
+                    function(writer) {
+                        writer.onwriteend = onWriteEnd;
+                        writer.onerror = onError;
+                        writer.truncate(size);
+                    },
+                    function(error) {
+                        errorCallback(error.code);
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(error.code);
+            }
+        );
+    }
+};
+
+
+//console.log("TIZEN FILE END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/FileTransfer.js
+define("cordova/plugin/tizen/FileTransfer", function(require, exports, module) {
+
+/*global WebKitBlobBuilder:false */
+
+
+//console.log("TIZEN FILE TRANSFER START");
+
+var FileEntry = require('cordova/plugin/FileEntry'),
+    FileTransferError = require('cordova/plugin/FileTransferError'),
+    FileUploadResult = require('cordova/plugin/FileUploadResult');
+
+var nativeResolveLocalFileSystemURI = window.webkitResolveLocalFileSystemURL;
+
+function getParentPath(filePath) {
+    var pos = filePath.lastIndexOf('/');
+    return filePath.substring(0, pos + 1);
+}
+
+function getFileName(filePath) {
+    var pos = filePath.lastIndexOf('/');
+    return filePath.substring(pos + 1);
+}
+
+module.exports = {
+    /* common/FileTransfer.js, args = [filePath, server, fileKey, fileName, mimeType, params, trustAllHosts, chunkedMode, headers, this._id, httpMethod] */
+    upload: function(successCallback, errorCallback, args) {
+        var filePath = args[0],
+            server = args[1],
+            fileKey = args[2],
+            fileName = args[3],
+            mimeType = args[4],
+            params = args[5],
+            /*trustAllHosts = args[6],*/
+            chunkedMode = args[7];
+
+        nativeResolveLocalFileSystemURI(
+            filePath,
+            function(entry) {
+                entry.file(
+                    function(file) {
+                        function uploadFile(blobFile) {
+                            var fd = new FormData();
+
+                            fd.append(fileKey, blobFile, fileName);
+
+                            for (var prop in params) {
+                                if(params.hasOwnProperty(prop)) {
+                                    fd.append(prop, params[prop]);
+                                }
+                            }
+                            var xhr = new XMLHttpRequest();
+
+                            xhr.open("POST", server);
+
+                            xhr.onload = function(evt) {
+                                if (xhr.status == 200) {
+                                    var result = new FileUploadResult();
+                                    result.bytesSent = file.size;
+                                    result.responseCode = xhr.status;
+                                    result.response = xhr.response;
+                                    successCallback(result);
+                                }
+                                else if (xhr.status == 404) {
+                                    errorCallback(new FileTransferError(FileTransferError.INVALID_URL_ERR));
+                                }
+                                else {
+                                    errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                                }
+                            };
+
+                            xhr.ontimeout = function(evt) {
+                                errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                            };
+
+                            xhr.send(fd);
+                        }
+
+                        var bytesPerChunk;
+
+                        if (chunkedMode === true) {
+                            bytesPerChunk = 1024 * 1024; // 1MB chunk sizes.
+                        }
+                        else {
+                            bytesPerChunk = file.size;
+                        }
+                        var start = 0;
+                        var end = bytesPerChunk;
+                        while (start < file.size) {
+                            var chunk = file.webkitSlice(start, end, mimeType);
+                            uploadFile(chunk);
+                            start = end;
+                            end = start + bytesPerChunk;
+                        }
+                    },
+                    function(error) {
+                        errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                    }
+                );
+            },
+            function(error) {
+                errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+            }
+        );
+    },
+
+    /* args = [source, target, trustAllHosts, this._id, headers] */
+    download: function(successCallback, errorCallback, args) {
+        var url = args[0],
+            filePath = args[1];
+
+        var xhr = new XMLHttpRequest();
+
+        function writeFile(fileEntry) {
+            fileEntry.createWriter(
+                function(writer) {
+                    writer.onwriteend = function(evt) {
+                        if (!evt.target.error) {
+                            successCallback(new FileEntry(fileEntry.name, fileEntry.toURL()));
+                        } else {
+                            errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                        }
+                    };
+
+                    writer.onerror = function(evt) {
+                        errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                    };
+
+                    var builder = new WebKitBlobBuilder();
+                    builder.append(xhr.response);
+
+                    var blob = builder.getBlob();
+                    writer.write(blob);
+                },
+                function(error) {
+                    errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                }
+            );
+        }
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == xhr.DONE) {
+                if (xhr.status == 200 && xhr.response) {
+                    nativeResolveLocalFileSystemURI(
+                        getParentPath(filePath),
+                        function(dir) {
+                            dir.getFile(
+                                getFileName(filePath),
+                                {create: true},
+                                writeFile,
+                                function(error) {
+                                    errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                                }
+                            );
+                        },
+                        function(error) {
+                            errorCallback(new FileTransferError(FileTransferError.FILE_NOT_FOUND_ERR));
+                        }
+                    );
+                }
+                else if (xhr.status == 404) {
+                    errorCallback(new FileTransferError(FileTransferError.INVALID_URL_ERR));
+                }
+                else {
+                    errorCallback(new FileTransferError(FileTransferError.CONNECTION_ERR));
+                }
+            }
+        };
+
+        xhr.open("GET", url, true);
+        xhr.responseType = "arraybuffer";
+        xhr.send();
+    },
+
+
+    /* args = [this._id]); */
+    abort: function(successCallback, errorCallback, args) {
+        errorCallback(FileTransferError.ABORT_ERR);
+    }
+
+};
+
+
+//console.log("TIZEN FILE TRANSFER END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/Globalization.js
+define("cordova/plugin/tizen/Globalization", function(require, exports, module) {
+
+
+/*global tizen:false */
+
+var argscheck = require('cordova/argscheck'),
+    exec = require('cordova/exec'),
+    GlobalizationError = require('cordova/plugin/GlobalizationError');
+
+var globalization = {
+
+    /**
+    * Returns the string identifier for the client's current language.
+    * It returns the language identifier string to the successCB callback with a
+    * properties object as a parameter. If there is an error getting the language,
+    * then the errorCB callback is invoked.
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    * @return Object.value {String}: The language identifier
+    *
+    * @error GlobalizationError.UNKNOWN_ERROR
+    *
+    * Example
+    *    globalization.getPreferredLanguage(function (language) {alert('language:' + language.value + '\n');},
+    *                                function () {});
+    */
+    getPreferredLanguage:function(successCB, failureCB) {
+        console.log('exec(successCB, failureCB, "Globalization","getPreferredLanguage", []);');
+
+        tizen.systeminfo.getPropertyValue (
+            "LOCALE",
+            function (localeInfo) {
+                console.log("Cordova, getLocaleName, language is  " + localeInfo.language);
+                successCB( {"value": localeInfo.language});
+            },
+            function(error) {
+                console.log("Cordova, getLocaleName, An error occurred " + error.message);
+                failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "cannot retrieve language name"));
+            }
+        );
+    },
+
+    /**
+    * Returns the string identifier for the client's current locale setting.
+    * It returns the locale identifier string to the successCB callback with a
+    * properties object as a parameter. If there is an error getting the locale,
+    * then the errorCB callback is invoked.
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    * @return Object.value {String}: The locale identifier
+    *
+    * @error GlobalizationError.UNKNOWN_ERROR
+    *
+    * Example
+    *    globalization.getLocaleName(function (locale) {alert('locale:' + locale.value + '\n');},
+    *                                function () {});
+    */
+    getLocaleName:function(successCB, failureCB) {
+        tizen.systeminfo.getPropertyValue (
+            "LOCALE",
+            function (localeInfo) {
+                console.log("Cordova, getLocaleName, locale name (country) is  " + localeInfo.country);
+                successCB( {"value":localeInfo.language});
+            },
+            function(error) {
+                console.log("Cordova, getLocaleName, An error occurred " + error.message);
+                failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "cannot retrieve locale name"));
+            }
+        );
+    },
+
+
+    /**
+    * Returns a date formatted as a string according to the client's user preferences and
+    * calendar using the time zone of the client. It returns the formatted date string to the
+    * successCB callback with a properties object as a parameter. If there is an error
+    * formatting the date, then the errorCB callback is invoked.
+    *
+    * The defaults are: formatLenght="short" and selector="date and time"
+    *
+    * @param {Date} date
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            formatLength {String}: 'short', 'medium', 'long', or 'full'
+    *            selector {String}: 'date', 'time', or 'date and time'
+    *
+    * @return Object.value {String}: The localized date string
+    *
+    * @error GlobalizationError.FORMATTING_ERROR
+    *
+    * Example
+    *    globalization.dateToString(new Date(),
+    *                function (date) {alert('date:' + date.value + '\n');},
+    *                function (errorCode) {alert(errorCode);},
+    *                {formatLength:'short'});
+    */
+    dateToString:function(date, successCB, failureCB, options) {
+        var dateValue = date.valueOf();
+        console.log('exec(successCB, failureCB, "Globalization", "dateToString", [{"date": dateValue, "options": options}]);');
+
+        var tzdate = null;
+        var format = null;
+
+        tzdate = new tizen.TZDate(date);
+
+        if (tzdate) {
+            if (options && (options.formatLength == 'short') ){
+                format = tzdate.toLocaleDateString();
+            }
+            else{
+                format = tzdate.toLocaleString();
+            }
+            console.log('Cordova, globalization, dateToString ' +format);
+        }
+
+        if (format)
+        {
+            successCB ({"value": format});
+        }
+        else {
+            failureCB(new GlobalizationError(GlobalizationError.FORMATTING_ERROR , "cannot format date string"));
+        }
+    },
+
+
+    /**
+    * Parses a date formatted as a string according to the client's user
+    * preferences and calendar using the time zone of the client and returns
+    * the corresponding date object. It returns the date to the successCB
+    * callback with a properties object as a parameter. If there is an error
+    * parsing the date string, then the errorCB callback is invoked.
+    *
+    * The defaults are: formatLength="short" and selector="date and time"
+    *
+    * @param {String} dateString
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            formatLength {String}: 'short', 'medium', 'long', or 'full'
+    *            selector {String}: 'date', 'time', or 'date and time'
+    *
+    * @return    Object.year {Number}: The four digit year
+    *            Object.month {Number}: The month from (0 - 11)
+    *            Object.day {Number}: The day from (1 - 31)
+    *            Object.hour {Number}: The hour from (0 - 23)
+    *            Object.minute {Number}: The minute from (0 - 59)
+    *            Object.second {Number}: The second from (0 - 59)
+    *            Object.millisecond {Number}: The milliseconds (from 0 - 999),
+    *                                        not available on all platforms
+    *
+    * @error GlobalizationError.PARSING_ERROR
+    *
+    * Example
+    *    globalization.stringToDate('4/11/2011',
+    *                function (date) { alert('Month:' + date.month + '\n' +
+    *                    'Day:' + date.day + '\n' +
+    *                    'Year:' + date.year + '\n');},
+    *                function (errorCode) {alert(errorCode);},
+    *                {selector:'date'});
+    */
+    stringToDate:function(dateString, successCB, failureCB, options) {
+        argscheck.checkArgs('sfFO', 'Globalization.stringToDate', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "stringToDate", [{"dateString": dateString, "options": options}]);');
+
+        //not supported
+        failureCB(new GlobalizationError(GlobalizationError.PARSING_ERROR , "unsupported"));
+    },
+
+
+    /**
+    * Returns a pattern string for formatting and parsing dates according to the client's
+    * user preferences. It returns the pattern to the successCB callback with a
+    * properties object as a parameter. If there is an error obtaining the pattern,
+    * then the errorCB callback is invoked.
+    *
+    * The defaults are: formatLength="short" and selector="date and time"
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            formatLength {String}: 'short', 'medium', 'long', or 'full'
+    *            selector {String}: 'date', 'time', or 'date and time'
+    *
+    * @return    Object.pattern {String}: The date and time pattern for formatting and parsing dates.
+    *                                    The patterns follow Unicode Technical Standard #35
+    *                                    http://unicode.org/reports/tr35/tr35-4.html
+    *            Object.timezone {String}: The abbreviated name of the time zone on the client
+    *            Object.utc_offset {Number}: The current difference in seconds between the client's
+    *                                        time zone and coordinated universal time.
+    *            Object.dst_offset {Number}: The current daylight saving time offset in seconds
+    *                                        between the client's non-daylight saving's time zone
+    *                                        and the client's daylight saving's time zone.
+    *
+    * @error GlobalizationError.PATTERN_ERROR
+    *
+    * Example
+    *    globalization.getDatePattern(
+    *                function (date) {alert('pattern:' + date.pattern + '\n');},
+    *                function () {},
+    *                {formatLength:'short'});
+    */
+    getDatePattern:function(successCB, failureCB, options) {
+        console.log(' exec(successCB, failureCB, "Globalization", "getDatePattern", [{"options": options}]);');
+
+        var shortFormat = (options) ? ( options.formatLength === 'short') : true;
+
+        var formatString = tizen.time.getDateFormat ( shortFormat);
+
+
+        var current_datetime = tizen.time.getCurrentDateTime();
+
+        // probably will require some control of operation...
+        if (formatString)
+        {
+            successCB(
+                {
+                    "pattern": formatString,
+                    "timezone": current_datetime.getTimezoneAbbreviation(),
+                    "utc_offset": current_datetime.difference(current_datetime.toUTC()).length,
+                    "dst_offset": current_datetime.isDST()
+                }
+            );
+        }
+        else {
+            failureCB(new GlobalizationError(GlobalizationError.PATTERN_ERROR , "cannot get pattern"));
+        }
+    },
+
+
+    /**
+    * Returns an array of either the names of the months or days of the week
+    * according to the client's user preferences and calendar. It returns the array of names to the
+    * successCB callback with a properties object as a parameter. If there is an error obtaining the
+    * names, then the errorCB callback is invoked.
+    *
+    * The defaults are: type="wide" and item="months"
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            type {String}: 'narrow' or 'wide'
+    *            item {String}: 'months', or 'days'
+    *
+    * @return Object.value {Array{String}}: The array of names starting from either
+    *                                        the first month in the year or the
+    *                                        first day of the week.
+    * @error GlobalizationError.UNKNOWN_ERROR
+    *
+    * Example
+    *    globalization.getDateNames(function (names) {
+    *        for(var i = 0; i < names.value.length; i++) {
+    *            alert('Month:' + names.value[i] + '\n');}},
+    *        function () {});
+    */
+    getDateNames:function(successCB, failureCB, options) {
+        argscheck.checkArgs('fFO', 'Globalization.getDateNames', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "getDateNames", [{"options": options}]);');
+
+        failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "unsupported"));
+    },
+
+    /**
+    * Returns whether daylight savings time is in effect for a given date using the client's
+    * time zone and calendar. It returns whether or not daylight savings time is in effect
+    * to the successCB callback with a properties object as a parameter. If there is an error
+    * reading the date, then the errorCB callback is invoked.
+    *
+    * @param {Date} date
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    * @return Object.dst {Boolean}: The value "true" indicates that daylight savings time is
+    *                                in effect for the given date and "false" indicate that it is not.
+    *
+    * @error GlobalizationError.UNKNOWN_ERROR
+    *
+    * Example
+    *    globalization.isDayLightSavingsTime(new Date(),
+    *                function (date) {alert('dst:' + date.dst + '\n');}
+    *                function () {});
+    */
+    isDayLightSavingsTime:function(date, successCB, failureCB) {
+
+        var tzdate = null,
+            isDLS = false;
+
+        console.log('exec(successCB, failureCB, "Globalization", "isDayLightSavingsTime", [{"date": dateValue}]);');
+        console.log("date " + date + " value " + date.valueOf()) ;
+
+        tzdate = new tizen.TZDate(date);
+        if (tzdate) {
+            isDLS = false | (tzdate && tzdate.isDST());
+
+            console.log ("Cordova, globalization, isDayLightSavingsTime, " + isDLS);
+
+            successCB({"dst":isDLS});
+        }
+        else {
+            failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "cannot get information"));
+        }
+    },
+
+    /**
+    * Returns the first day of the week according to the client's user preferences and calendar.
+    * The days of the week are numbered starting from 1 where 1 is considered to be Sunday.
+    * It returns the day to the successCB callback with a properties object as a parameter.
+    * If there is an error obtaining the pattern, then the errorCB callback is invoked.
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    * @return Object.value {Number}: The number of the first day of the week.
+    *
+    * @error GlobalizationError.UNKNOWN_ERROR
+    *
+    * Example
+    *    globalization.getFirstDayOfWeek(function (day)
+    *                { alert('Day:' + day.value + '\n');},
+    *                function () {});
+    */
+    getFirstDayOfWeek:function(successCB, failureCB) {
+        argscheck.checkArgs('fF', 'Globalization.getFirstDayOfWeek', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "getFirstDayOfWeek", []);');
+
+        // there is no API to get the fist day of the week in Tizen Dvice API
+        successCB({value:1});
+
+        // first day of week is a settings in the date book app
+        // what about : getting the settings directly or asking the date book ?
+    },
+
+
+    /**
+    * Returns a number formatted as a string according to the client's user preferences.
+    * It returns the formatted number string to the successCB callback with a properties object as a
+    * parameter. If there is an error formatting the number, then the errorCB callback is invoked.
+    *
+    * The defaults are: type="decimal"
+    *
+    * @param {Number} number
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            type {String}: 'decimal', "percent", or 'currency'
+    *
+    * @return Object.value {String}: The formatted number string.
+    *
+    * @error GlobalizationError.FORMATTING_ERROR
+    *
+    * Example
+    *    globalization.numberToString(3.25,
+    *                function (number) {alert('number:' + number.value + '\n');},
+    *                function () {},
+    *                {type:'decimal'});
+    */
+    numberToString:function(number, successCB, failureCB, options) {
+        argscheck.checkArgs('nfFO', 'Globalization.numberToString', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "numberToString", [{"number": number, "options": options}]);');
+        //not supported
+        failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "unsupported"));
+    },
+
+    /**
+    * Parses a number formatted as a string according to the client's user preferences and
+    * returns the corresponding number. It returns the number to the successCB callback with a
+    * properties object as a parameter. If there is an error parsing the number string, then
+    * the errorCB callback is invoked.
+    *
+    * The defaults are: type="decimal"
+    *
+    * @param {String} numberString
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            type {String}: 'decimal', "percent", or 'currency'
+    *
+    * @return Object.value {Number}: The parsed number.
+    *
+    * @error GlobalizationError.PARSING_ERROR
+    *
+    * Example
+    *    globalization.stringToNumber('1234.56',
+    *                function (number) {alert('Number:' + number.value + '\n');},
+    *                function () { alert('Error parsing number');});
+    */
+    stringToNumber:function(numberString, successCB, failureCB, options) {
+        argscheck.checkArgs('sfFO', 'Globalization.stringToNumber', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "stringToNumber", [{"numberString": numberString, "options": options}]);');
+
+        //not supported
+        failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "unsupported"));
+    },
+
+    /**
+    * Returns a pattern string for formatting and parsing numbers according to the client's user
+    * preferences. It returns the pattern to the successCB callback with a properties object as a
+    * parameter. If there is an error obtaining the pattern, then the errorCB callback is invoked.
+    *
+    * The defaults are: type="decimal"
+    *
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    * @param {Object} options {optional}
+    *            type {String}: 'decimal', "percent", or 'currency'
+    *
+    * @return    Object.pattern {String}: The number pattern for formatting and parsing numbers.
+    *                                    The patterns follow Unicode Technical Standard #35.
+    *                                    http://unicode.org/reports/tr35/tr35-4.html
+    *            Object.symbol {String}: The symbol to be used when formatting and parsing
+    *                                    e.g., percent or currency symbol.
+    *            Object.fraction {Number}: The number of fractional digits to use when parsing and
+    *                                    formatting numbers.
+    *            Object.rounding {Number}: The rounding increment to use when parsing and formatting.
+    *            Object.positive {String}: The symbol to use for positive numbers when parsing and formatting.
+    *            Object.negative: {String}: The symbol to use for negative numbers when parsing and formatting.
+    *            Object.decimal: {String}: The decimal symbol to use for parsing and formatting.
+    *            Object.grouping: {String}: The grouping symbol to use for parsing and formatting.
+    *
+    * @error GlobalizationError.PATTERN_ERROR
+    *
+    * Example
+    *    globalization.getNumberPattern(
+    *                function (pattern) {alert('Pattern:' + pattern.pattern + '\n');},
+    *                function () {});
+    */
+    getNumberPattern:function(successCB, failureCB, options) {
+        argscheck.checkArgs('fFO', 'Globalization.getNumberPattern', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "getNumberPattern", [{"options": options}]);');
+
+        //not supported
+        failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "unsupported"));
+    },
+
+    /**
+    * Returns a pattern string for formatting and parsing currency values according to the client's
+    * user preferences and ISO 4217 currency code. It returns the pattern to the successCB callback with a
+    * properties object as a parameter. If there is an error obtaining the pattern, then the errorCB
+    * callback is invoked.
+    *
+    * @param {String} currencyCode
+    * @param {Function} successCB
+    * @param {Function} errorCB
+    *
+    * @return    Object.pattern {String}: The currency pattern for formatting and parsing currency values.
+    *                                    The patterns follow Unicode Technical Standard #35
+    *                                    http://unicode.org/reports/tr35/tr35-4.html
+    *            Object.code {String}: The ISO 4217 currency code for the pattern.
+    *            Object.fraction {Number}: The number of fractional digits to use when parsing and
+    *                                    formatting currency.
+    *            Object.rounding {Number}: The rounding increment to use when parsing and formatting.
+    *            Object.decimal: {String}: The decimal symbol to use for parsing and formatting.
+    *            Object.grouping: {String}: The grouping symbol to use for parsing and formatting.
+    *
+    * @error GlobalizationError.FORMATTING_ERROR
+    *
+    * Example
+    *    globalization.getCurrencyPattern('EUR',
+    *                function (currency) {alert('Pattern:' + currency.pattern + '\n');}
+    *                function () {});
+    */
+    getCurrencyPattern:function(currencyCode, successCB, failureCB) {
+        argscheck.checkArgs('sfF', 'Globalization.getCurrencyPattern', arguments);
+        console.log('exec(successCB, failureCB, "Globalization", "getCurrencyPattern", [{"currencyCode": currencyCode}]);');
+
+        //not supported
+        failureCB(new GlobalizationError(GlobalizationError.UNKNOWN_ERROR , "unsupported"));
+    }
+
+};
+
+module.exports = globalization;
+
+});
+
+// file: lib/tizen/plugin/tizen/Media.js
+define("cordova/plugin/tizen/Media", function(require, exports, module) {
+
+/*global Media:false, webkitURL:false */
+var MediaError = require('cordova/plugin/MediaError'),
+    audioObjects = {};
+
+//console.log("TIZEN MEDIA START");
+
+module.exports = {
+
+
+    create: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1];
+
+        console.log("media::create() - id =" + id + ", src =" + src);
+
+        audioObjects[id] = new Audio(src);
+
+        audioObjects[id].onStalledCB = function () {
+            console.log("media::onStalled()");
+
+            audioObjects[id].timer = window.setTimeout(
+                    function () {
+                        audioObjects[id].pause();
+
+                        if (audioObjects[id].currentTime !== 0)
+                            audioObjects[id].currentTime = 0;
+
+                        console.log("media::onStalled() - MEDIA_ERROR -> " + MediaError.MEDIA_ERR_ABORTED);
+
+                        var err = new MediaError(MediaError.MEDIA_ERR_ABORTED, "Stalled");
+
+                        Media.onStatus(id, Media.MEDIA_ERROR, err);
+                    },
+                    2000);
+        };
+
+        audioObjects[id].onEndedCB = function () {
+            console.log("media::onEndedCB() - MEDIA_STATE -> MEDIA_STOPPED");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
+        };
+
+        audioObjects[id].onErrorCB = function () {
+            console.log("media::onErrorCB() - MEDIA_ERROR -> " + event.srcElement.error);
+
+            Media.onStatus(id, Media.MEDIA_ERROR, event.srcElement.error);
+        };
+
+        audioObjects[id].onPlayCB = function () {
+            console.log("media::onPlayCB() - MEDIA_STATE -> MEDIA_STARTING");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STARTING);
+        };
+
+        audioObjects[id].onPlayingCB = function () {
+            console.log("media::onPlayingCB() - MEDIA_STATE -> MEDIA_RUNNING");
+
+            Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_RUNNING);
+        };
+
+        audioObjects[id].onDurationChangeCB = function () {
+            console.log("media::onDurationChangeCB() - MEDIA_DURATION -> " +  audioObjects[id].duration);
+
+            Media.onStatus(id, Media.MEDIA_DURATION, audioObjects[id].duration);
+        };
+
+        audioObjects[id].onTimeUpdateCB = function () {
+            console.log("media::onTimeUpdateCB() - MEDIA_POSITION -> " +  audioObjects[id].currentTime);
+
+            Media.onStatus(id, Media.MEDIA_POSITION, audioObjects[id].currentTime);
+        };
+
+        audioObjects[id].onCanPlayCB = function () {
+            console.log("media::onCanPlayCB()");
+
+            window.clearTimeout(audioObjects[id].timer);
+
+            audioObjects[id].play();
+        };
+    },
+
+    startPlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1], options = args[2];
+
+        console.log("media::startPlayingAudio() - id =" + id + ", src =" + src + ", options =" + options);
+
+        audioObjects[id].addEventListener('canplay', audioObjects[id].onCanPlayCB);
+        audioObjects[id].addEventListener('ended', audioObjects[id].onEndedCB);
+        audioObjects[id].addEventListener('timeupdate', audioObjects[id].onTimeUpdateCB);
+        audioObjects[id].addEventListener('durationchange', audioObjects[id].onDurationChangeCB);
+        audioObjects[id].addEventListener('playing', audioObjects[id].onPlayingCB);
+        audioObjects[id].addEventListener('play', audioObjects[id].onPlayCB);
+        audioObjects[id].addEventListener('error', audioObjects[id].onErrorCB);
+        audioObjects[id].addEventListener('stalled', audioObjects[id].onStalledCB);
+
+        audioObjects[id].play();
+    },
+
+    stopPlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        window.clearTimeout(audioObjects[id].timer);
+
+        audioObjects[id].pause();
+
+        if (audioObjects[id].currentTime !== 0)
+            audioObjects[id].currentTime = 0;
+
+        console.log("media::stopPlayingAudio() - MEDIA_STATE -> MEDIA_STOPPED");
+
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_STOPPED);
+
+        audioObjects[id].removeEventListener('canplay', audioObjects[id].onCanPlayCB);
+        audioObjects[id].removeEventListener('ended', audioObjects[id].onEndedCB);
+        audioObjects[id].removeEventListener('timeupdate', audioObjects[id].onTimeUpdateCB);
+        audioObjects[id].removeEventListener('durationchange', audioObjects[id].onDurationChangeCB);
+        audioObjects[id].removeEventListener('playing', audioObjects[id].onPlayingCB);
+        audioObjects[id].removeEventListener('play', audioObjects[id].onPlayCB);
+        audioObjects[id].removeEventListener('error', audioObjects[id].onErrorCB);
+        audioObjects[id].removeEventListener('error', audioObjects[id].onStalledCB);
+    },
+
+    seekToAudio: function (successCallback, errorCallback, args) {
+
+        var id = args[0], milliseconds = args[1];
+
+        console.log("media::seekToAudio()");
+
+        audioObjects[id].currentTime = milliseconds;
+        successCallback( audioObjects[id].currentTime);
+    },
+
+    pausePlayingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        console.log("media::pausePlayingAudio() - MEDIA_STATE -> MEDIA_PAUSED");
+
+        audioObjects[id].pause();
+
+        Media.onStatus(id, Media.MEDIA_STATE, Media.MEDIA_PAUSED);
+    },
+
+    getCurrentPositionAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+        console.log("media::getCurrentPositionAudio()");
+        successCallback(audioObjects[id].currentTime);
+    },
+
+    release: function (successCallback, errorCallback, args) {
+        var id = args[0];
+        window.clearTimeout(audioObjects[id].timer);
+        console.log("media::release()");
+    },
+
+    setVolume: function (successCallback, errorCallback, args) {
+        var id = args[0], volume = args[1];
+
+        console.log("media::setVolume()");
+
+        audioObjects[id].volume = volume;
+    },
+
+    startRecordingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0], src = args[1];
+
+        console.log("media::startRecordingAudio() - id =" + id + ", src =" + src);
+
+        function gotStreamCB(stream) {
+            audioObjects[id].src = webkitURL.createObjectURL(stream);
+            console.log("media::startRecordingAudio() - stream CB");
+        }
+
+        function gotStreamFailedCB(error) {
+            console.log("media::startRecordingAudio() - error CB:" + error.toString());
+        }
+
+        if (navigator.webkitGetUserMedia) {
+            audioObjects[id] = new Audio();
+            navigator.webkitGetUserMedia('audio', gotStreamCB, gotStreamFailedCB);
+        } else {
+            console.log("webkitGetUserMedia not supported");
+        }
+        successCallback();
+    },
+
+    stopRecordingAudio: function (successCallback, errorCallback, args) {
+        var id = args[0];
+
+        console.log("media::stopRecordingAudio() - id =" + id);
+
+        audioObjects[id].pause();
+        successCallback();
+    }
+};
+
+//console.log("TIZEN MEDIA END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/MediaError.js
+define("cordova/plugin/tizen/MediaError", function(require, exports, module) {
+
+
+// The MediaError object already exists on Tizen. This prevents the Cordova
+// version from being defined. This object is used to merge in differences
+// between Tizen and Cordova MediaError objects.
+module.exports = {
+    MEDIA_ERR_NONE_ACTIVE : 0,
+    MEDIA_ERR_NONE_SUPPORTED : 4
+};
+
+});
+
+// file: lib/tizen/plugin/tizen/NetworkStatus.js
+define("cordova/plugin/tizen/NetworkStatus", function(require, exports, module) {
+
+/*global tizen:false */
+var Connection = require('cordova/plugin/Connection');
+
+//console.log("TIZEN CONNECTION AKA NETWORK STATUS START");
+
+module.exports = {
+    getConnectionInfo: function (successCallback, errorCallback) {
+
+        var cncType = Connection.NONE;
+        var infoCount = 0;
+        var deviceCapabilities = null;
+        var timerId = 0;
+        var timeout = 300;
+
+
+        function connectionCB() {
+
+            if (timerId !== null) {
+                clearTimeout(timerId);
+                timerId = null;
+            }
+
+            infoCount++;
+
+            if (infoCount > 1) {
+                if (successCallback) {
+                    successCallback(cncType);
+                }
+            }
+        }
+
+        function errorCB(error) {
+            console.log("Error: " + error.code + "," + error.name + "," + error.message);
+
+            if (errorCallback) {
+                errorCallback();
+            }
+        }
+
+        function wifiSuccessCB(wifi) {
+            if ((wifi.status === "ON")  && (wifi.ipAddress.length !== 0)) {
+                cncType = Connection.WIFI;
+            }
+            connectionCB();
+        }
+
+        function cellularSuccessCB(cell) {
+            if ((cncType === Connection.NONE) && (cell.status === "ON") && (cell.ipAddress.length !== 0)) {
+                cncType = Connection.CELL_2G;
+            }
+            connectionCB();
+        }
+
+
+        deviceCapabilities = tizen.systeminfo.getCapabilities();
+
+
+        timerId = setTimeout( function(){
+            timerId = null;
+            infoCount = 1;
+            connectionCB();
+        }, timeout);
+
+
+        if (deviceCapabilities.wifi) {
+            tizen.systeminfo.getPropertyValue("WIFI_NETWORK", wifiSuccessCB, errorCB);
+        }
+
+        if (deviceCapabilities.telephony) {
+            tizen.systeminfo.getPropertyValue("CELLULAR_NETWORK", cellularSuccessCB, errorCB);
+        }
+
+    }
+};
+
+//console.log("TIZEN CONNECTION AKA NETWORK STATUS END");
+
+});
+
+// file: lib/tizen/plugin/tizen/Notification.js
+define("cordova/plugin/tizen/Notification", function(require, exports, module) {
+
+var SoundBeat = require('cordova/plugin/tizen/SoundBeat');
+
+/* TODO: get resource path from app environment? */
+var soundBeat = new SoundBeat(["./sounds/beep.wav"]);
+
+
+//console.log("TIZEN NOTIFICATION START");
+
+
+module.exports = {
+
+    alert: function(message, alertCallback, title, buttonName) {
+        return this.confirm(message, alertCallback, title, buttonName);
+    },
+
+    confirm: function(message, confirmCallback, title, buttonLabels) {
+        var index            =    null,
+            overlayElement    =    null,
+            popup            =    null,
+            element         =    null,
+            titleString        =     null,
+            messageString    =    null,
+            buttonString    =    null,
+            buttonsArray    =    null;
+
+
+        console.log ("message" , message);
+        console.log ("confirmCallback" , confirmCallback);
+        console.log ("title" , title);
+        console.log ("buttonLabels" , buttonLabels);
+
+        titleString = '<div class="popup-title"><p>' + title + '</p></div>';
+        messageString = '<div class="popup-text"><p>' + message + '</p></div>';
+        buttonString = '<div class="popup-button-bg"><ul>';
+
+        switch(typeof(buttonLabels))
+        {
+        case "string":
+            buttonsArray = buttonLabels.split(",");
+
+            if (buttonsArray === null) {
+                buttonsArray = buttonLabels;
+            }
+
+            for (index in buttonsArray) {
+                buttonString += '<li><input id="popup-button-' + buttonsArray[index]+
+                                '" type="button" value="' + buttonsArray[index] + '" /></li>';
+                console.log ("index: ", index,"");
+                console.log ("buttonsArray[index]: ", buttonsArray[index]);
+                console.log ("buttonString: ", buttonString);
+            }
+            break;
+
+        case "array":
+            if (buttonsArray === null) {
+                buttonsArray = buttonLabels;
+            }
+
+            for (index in buttonsArray) {
+                buttonString += '<li><input id="popup-button-' + buttonsArray[index]+
+                                '" type="button" value="' + buttonsArray[index] + '" /></li>';
+                console.log ("index: ", index,"");
+                console.log ("buttonsArray[index]: ", buttonsArray[index]);
+                console.log ("buttonString: ", buttonString);
+            }
+            break;
+        default:
+            console.log ("cordova/plugin/tizen/Notification, default, buttonLabels: ", buttonLabels);
+            break;
+        }
+
+        buttonString += '</ul></div>';
+
+        overlayElement = document.createElement("div");
+        overlayElement.className = 'ui-popupwindow-screen';
+
+        overlayElement.style.zIndex = 1001;
+        overlayElement.style.width = "100%";
+        overlayElement.style.height = "100%";
+        overlayElement.style.top = 0;
+        overlayElement.style.left = 0;
+        overlayElement.style.margin = 0;
+        overlayElement.style.padding = 0;
+        overlayElement.style.position = "absolute";
+
+        popup = document.createElement("div");
+        popup.className = "ui-popupwindow";
+        popup.style.position = "fixed";
+        popup.style.zIndex = 1002;
+        popup.innerHTML = titleString + messageString + buttonString;
+
+        document.body.appendChild(overlayElement);
+        document.body.appendChild(popup);
+
+        function createListener(button) {
+            return function() {
+                document.body.removeChild(overlayElement);
+                document.body.removeChild(popup);
+                confirmCallback(button.value);
+            };
+        }
+
+        for (index in buttonsArray) {
+            console.log ("index: ", index);
+
+            element = document.getElementById("popup-button-" + buttonsArray[index]);
+            element.addEventListener("click", createListener(element), false);
+        }
+    },
+
+    prompt: function (message, promptCallback, title, buttonLabels) {
+        console.log ("message" , message);
+        console.log ("promptCallback" , promptCallback);
+        console.log ("title" , title);
+        console.log ("buttonLabels" , buttonLabels);
+
+        //a temporary implementation using window.prompt()
+        // note taht buttons are cancel ok (in that order)
+        // gonna to return based on having OK  / Cancel
+        // ok is 1, cancel is 2
+
+        var result = prompt(message);
+
+        if (promptCallback && (typeof promptCallback == "function")) {
+            promptCallback((result === null) ? 2 : 1, result);
+        }
+    },
+
+    vibrate: function(milliseconds) {
+        console.log ("milliseconds" , milliseconds);
+
+        if (navigator.vibrate) {
+            navigator.vibrate(milliseconds);
+        }
+        else {
+            console.log ("cordova/plugin/tizen/Notification, vibrate API does not exist");
+        }
+    },
+
+    beep: function(count) {
+        console.log ("count" , count);
+        soundBeat.play(count);
+    }
+};
+
+//console.log("TIZEN NOTIFICATION END");
+
+
+});
+
+// file: lib/tizen/plugin/tizen/SoundBeat.js
+define("cordova/plugin/tizen/SoundBeat", function(require, exports, module) {
+
+/*global webkitAudioContext:false */
+/*
+ *  SoundBeat
+ * used by Notification Manager beep method
+ *
+ * This class provides sounds play
+ *
+ * uses W3C  Web Audio API
+ * uses BufferLoader object
+ *
+ * NOTE: the W3C Web Audio doc tells we do not need to recreate the audio
+ *       context to play a sound but only the audiosourcenode (createBufferSource)
+ *       in the WebKit implementation we have to.
+ *
+ */
+
+var BufferLoader = require('cordova/plugin/tizen/BufferLoader');
+
+function SoundBeat(urlList) {
+    this.context = null;
+    this.urlList = urlList || null;
+    this.buffers = null;
+}
+
+/*
+ * This method play a loaded sounds on the Device
+ * @param {Number} times Number of times to play loaded sounds.
+ *
+ */
+SoundBeat.prototype.play = function(times) {
+
+    var i = 0, sources = [], that = this;
+
+    function finishedLoading (bufferList) {
+        that.buffers = bufferList;
+
+        for (i = 0; i < that.buffers.length ; i +=1) {
+            if (that.context) {
+                sources[i] = that.context.createBufferSource();
+
+                sources[i].buffer = that.buffers[i];
+                sources[i].connect (that.context.destination);
+
+                sources[i].loop = true;
+                sources[i].noteOn (0);
+                sources[i].noteOff(sources[i].buffer.duration * times);
+            }
+        }
+    }
+
+    if (webkitAudioContext !== null) {
+        this.context = new webkitAudioContext();
+    }
+    else {
+        console.log ("SoundBeat.prototype.play, w3c web audio api not supported");
+        this.context = null;
+    }
+
+    if (this.context === null) {
+        console.log ("SoundBeat.prototype.play, cannot create audio context object");
+        return;
+    }
+
+    this.bufferLoader = new BufferLoader (this.context, this.urlList, finishedLoading);
+    if (this.bufferLoader === null) {
+        console.log ("SoundBeat.prototype.play, cannot create buffer loader object");
+        return;
+    }
+
+    this.bufferLoader.load();
+};
+
+module.exports = SoundBeat;
+
+});
+
+// file: lib/tizen/plugin/tizen/SplashScreen.js
+define("cordova/plugin/tizen/SplashScreen", function(require, exports, module) {
+
+var exec = require('cordova/exec');
+
+var splashscreen = {
+
+    window: null,
+
+
+    show:function() {
+        console.log ("tizen splashscreen show()");
+
+        // open a windows in splashscreen.window
+        // add DOM with an Image
+
+    },
+    hide:function() {
+        console.log ("tizen splashscreen hide()");
+        //delete the window splashscreen.window
+        //set to null
+    }
+};
+
+module.exports = splashscreen;
+
+});
+
+// file: lib/tizen/plugin/tizen/contacts.js
+define("cordova/plugin/tizen/contacts", function(require, exports, module) {
+
+/*global tizen:false */
+var ContactError = require('cordova/plugin/ContactError'),
+    utils = require('cordova/utils'),
+    ContactUtils = require('cordova/plugin/tizen/ContactUtils');
+
+module.exports = {
+    /**
+     * Returns an array of Contacts matching the search criteria.
+     *
+     * @return array of Contacts matching search criteria
+     */
+    find : function(fields, successCB, failCB, options) {
+
+        // Success callback is required. Throw exception if not specified.
+        if (typeof successCB !== 'function') {
+            throw new TypeError("You must specify a success callback for the find command.");
+        }
+
+        // Search qualifier is required and cannot be empty.
+        if (!fields || !(utils.isArray(fields)) || fields.length === 0) {
+            if (typeof failCB === 'function') {
+                failCB(new ContactError(ContactError.INVALID_ARGUMENT_ERROR));
+            }
+            return;
+        }
+
+        // options are optional
+        var filter ="",
+            multiple = false,
+            contacts = [],
+            tizenFilter = null;
+
+        if (options) {
+            filter = options.filter || "";
+            multiple =  options.multiple || false;
+        }
+
+        if (filter){
+            tizenFilter = ContactUtils.buildFilterExpression(fields, filter);
+        }
+
+        tizen.contact.getDefaultAddressBook().find(
+            function(tizenContacts) {
+                if (multiple) {
+                    for (var index in tizenContacts) {
+                        contacts.push(ContactUtils.createContact(tizenContacts[index], fields));
+                    }
+                }
+                else {
+                    contacts.push(ContactUtils.createContact(tizenContacts[0], fields));
+                }
+
+                // return results
+                successCB(contacts);
+            },
+            function(error) {
+                if (typeof failCB === 'function') {
+                    failCB(ContactError.UNKNOWN_ERROR);
+                }
+            },
+            tizenFilter,
+            null);
+    }
+};
+
+});
+
+// file: lib/tizen/plugin/tizen/contacts/symbols.js
+define("cordova/plugin/tizen/contacts/symbols", function(require, exports, module) {
+
+require('cordova/plugin/contacts/symbols');
 
 var modulemapper = require('cordova/modulemapper');
 
-modulemapper.clobbers('cordova/plugin/windowsphone/console', 'navigator.console');
-modulemapper.clobbers('cordova/plugin/windowsphone/console', 'console');
+modulemapper.merges('cordova/plugin/tizen/contacts', 'navigator.contacts');
+modulemapper.merges('cordova/plugin/tizen/Contact', 'Contact');
 
 });
 
-// file: lib\windowsphone\plugin\windowsphone\notification\plugininit.js
-define("cordova/plugin/windowsphone/notification/plugininit", function(require, exports, module) {
+// file: lib/tizen/plugin/tizen/manager.js
+define("cordova/plugin/tizen/manager", function(require, exports, module) {
 
-window.alert = window.alert || require("cordova/plugin/notification").alert;
-window.confirm = window.confirm || require("cordova/plugin/notification").confirm;
+var cordova = require('cordova');
+
+module.exports = {
+    exec: function (successCallback, errorCallback, clazz, action, args) {
+        var plugin = require('cordova/plugin/tizen/' + clazz);
+
+        if (plugin && typeof plugin[action] === 'function') {
+            var result = plugin[action](successCallback, errorCallback, args);
+            return result || {status: cordova.callbackStatus.NO_RESULT};
+        }
+
+        return {"status" : cordova.callbackStatus.CLASS_NOT_FOUND_EXCEPTION, "message" : "Function " + clazz + "::" + action + " cannot be found"};
+    },
+    resume: function () {},
+    pause: function () {},
+    destroy: function () {}
+};
+
+});
+
+// file: lib/common/pluginloader.js
+define("cordova/pluginloader", function(require, exports, module) {
+
+var channel = require('cordova/channel');
+var modulemapper = require('cordova/modulemapper');
+
+// Helper function to inject a <script> tag.
+function injectScript(url, onload, onerror) {
+    var script = document.createElement("script");
+    // onload fires even when script fails loads with an error.
+    script.onload = onload;
+    script.onerror = onerror || onload;
+    script.src = url;
+    document.head.appendChild(script);
+}
+
+function onScriptLoadingComplete(moduleList) {
+    // Loop through all the plugins and then through their clobbers and merges.
+    for (var i = 0, module; module = moduleList[i]; i++) {
+        if (module) {
+            try {
+                if (module.clobbers && module.clobbers.length) {
+                    for (var j = 0; j < module.clobbers.length; j++) {
+                        modulemapper.clobbers(module.id, module.clobbers[j]);
+                    }
+                }
+
+                if (module.merges && module.merges.length) {
+                    for (var k = 0; k < module.merges.length; k++) {
+                        modulemapper.merges(module.id, module.merges[k]);
+                    }
+                }
+
+                // Finally, if runs is truthy we want to simply require() the module.
+                // This can be skipped if it had any merges or clobbers, though,
+                // since the mapper will already have required the module.
+                if (module.runs && !(module.clobbers && module.clobbers.length) && !(module.merges && module.merges.length)) {
+                    modulemapper.runs(module.id);
+                }
+            }
+            catch(err) {
+                // error with module, most likely clobbers, should we continue?
+            }
+        }
+    }
+
+    finishPluginLoading();
+}
+
+// Called when:
+// * There are plugins defined and all plugins are finished loading.
+// * There are no plugins to load.
+function finishPluginLoading() {
+    channel.onPluginsReady.fire();
+}
+
+// Handler for the cordova_plugins.js content.
+// See plugman's plugin_loader.js for the details of this object.
+// This function is only called if the really is a plugins array that isn't empty.
+// Otherwise the onerror response handler will just call finishPluginLoading().
+function handlePluginsObject(path, moduleList) {
+    // Now inject the scripts.
+    var scriptCounter = moduleList.length;
+
+    if (!scriptCounter) {
+        finishPluginLoading();
+        return;
+    }
+    function scriptLoadedCallback() {
+        if (!--scriptCounter) {
+            onScriptLoadingComplete(moduleList);
+        }
+    }
+
+    for (var i = 0; i < moduleList.length; i++) {
+        injectScript(path + moduleList[i].file, scriptLoadedCallback);
+    }
+}
+
+function injectPluginScript(pathPrefix) {
+    injectScript(pathPrefix + 'cordova_plugins.js', function(){
+        try {
+            var moduleList = require("cordova/plugin_list");
+            handlePluginsObject(pathPrefix, moduleList);
+        } catch (e) {
+            // Error loading cordova_plugins.js, file not found or something
+            // this is an acceptable error, pre-3.0.0, so we just move on.
+            finishPluginLoading();
+        }
+    },finishPluginLoading); // also, add script load error handler for file not found
+}
+
+function findCordovaPath() {
+    var path = null;
+    var scripts = document.getElementsByTagName('script');
+    var term = 'cordova.js';
+    for (var n = scripts.length-1; n>-1; n--) {
+        var src = scripts[n].src;
+        if (src.indexOf(term) == (src.length - term.length)) {
+            path = src.substring(0, src.length - term.length);
+            break;
+        }
+    }
+    return path;
+}
+
+// Tries to load all plugins' js-modules.
+// This is an async process, but onDeviceReady is blocked on onPluginsReady.
+// onPluginsReady is fired when there are no plugins to load, or they are all done.
+exports.load = function() {
+    var pathPrefix = findCordovaPath();
+    if (pathPrefix === null) {
+        console.log('Could not find cordova.js script tag. Plugin loading may fail.');
+        pathPrefix = '';
+    }
+    injectPluginScript(pathPrefix);
+};
 
 
 });
 
-// file: lib\common\symbols.js
+// file: lib/common/symbols.js
 define("cordova/symbols", function(require, exports, module) {
 
 var modulemapper = require('cordova/modulemapper');
@@ -6348,7 +9199,24 @@ modulemapper.clobbers('cordova/exec', 'Cordova.exec');
 
 });
 
-// file: lib\common\utils.js
+// file: lib/common/urlutil.js
+define("cordova/urlutil", function(require, exports, module) {
+
+var urlutil = exports;
+var anchorEl = document.createElement('a');
+
+/**
+ * For already absolute URLs, returns what is passed in.
+ * For relative URLs, converts them to absolute ones.
+ */
+urlutil.makeAbsolute = function(url) {
+  anchorEl.href = url;
+  return anchorEl.href;
+};
+
+});
+
+// file: lib/common/utils.js
 define("cordova/utils", function(require, exports, module) {
 
 var utils = exports;
@@ -6518,13 +9386,18 @@ function UUIDcreatePart(length) {
 
 });
 
-
 window.cordova = require('cordova');
-
-// file: lib\scripts\bootstrap.js
+// file: lib/scripts/bootstrap.js
 
 (function (context) {
+    if (context._cordovaJsLoaded) {
+        throw new Error('cordova.js included multiple times.');
+    }
+    context._cordovaJsLoaded = true;
+
     var channel = require('cordova/channel');
+    var pluginloader = require('cordova/pluginloader');
+
     var platformInitChannelsArray = [channel.onNativeReady, channel.onPluginsReady];
 
     function logUnfiredChannels(arr) {
@@ -6593,108 +9466,14 @@ window.cordova = require('cordova');
 
     }, platformInitChannelsArray);
 
-}(window));
-
-// file: lib\scripts\plugin_loader.js
-
-// Tries to load all plugins' js-modules.
-// This is an async process, but onDeviceReady is blocked on onPluginsReady.
-// onPluginsReady is fired when there are no plugins to load, or they are all done.
-(function (context) {
-    // To be populated with the handler by handlePluginsObject.
-    var onScriptLoadingComplete;
-
-    var scriptCounter = 0;
-    function scriptLoadedCallback() {
-        scriptCounter--;
-        if (scriptCounter === 0) {
-            onScriptLoadingComplete && onScriptLoadingComplete();
-        }
-    }
-
-    // Helper function to inject a <script> tag.
-    function injectScript(path) {
-        scriptCounter++;
-        var script = document.createElement("script");
-        script.onload = scriptLoadedCallback;
-        script.src = path;
-        document.head.appendChild(script);
-    }
-
-    // Called when:
-    // * There are plugins defined and all plugins are finished loading.
-    // * There are no plugins to load.
-    function finishPluginLoading() {
-        context.cordova.require('cordova/channel').onPluginsReady.fire();
-    }
-
-    // Handler for the cordova_plugins.json content.
-    // See plugman's plugin_loader.js for the details of this object.
-    // This function is only called if the really is a plugins array that isn't empty.
-    // Otherwise the XHR response handler will just call finishPluginLoading().
-    function handlePluginsObject(modules) {
-        // First create the callback for when all plugins are loaded.
-        var mapper = context.cordova.require('cordova/modulemapper');
-        onScriptLoadingComplete = function() {
-            // Loop through all the plugins and then through their clobbers and merges.
-            for (var i = 0; i < modules.length; i++) {
-                var module = modules[i];
-                if (!module) continue;
-
-                if (module.clobbers && module.clobbers.length) {
-                    for (var j = 0; j < module.clobbers.length; j++) {
-                        mapper.clobbers(module.id, module.clobbers[j]);
-                    }
-                }
-
-                if (module.merges && module.merges.length) {
-                    for (var k = 0; k < module.merges.length; k++) {
-                        mapper.merges(module.id, module.merges[k]);
-                    }
-                }
-
-                // Finally, if runs is truthy we want to simply require() the module.
-                // This can be skipped if it had any merges or clobbers, though,
-                // since the mapper will already have required the module.
-                if (module.runs && !(module.clobbers && module.clobbers.length) && !(module.merges && module.merges.length)) {
-                    context.cordova.require(module.id);
-                }
-            }
-
-            finishPluginLoading();
-        };
-
-        // Now inject the scripts.
-        for (var i = 0; i < modules.length; i++) {
-            injectScript(modules[i].file);
-        }
-    }
-
-
-    // Try to XHR the cordova_plugins.json file asynchronously.
-    try { // we commented we were going to try, so let us actually try and catch
-        var xhr = new context.XMLHttpRequest();
-        xhr.onload = function() {
-            // If the response is a JSON string which composes an array, call handlePluginsObject.
-            // If the request fails, or the response is not a JSON array, just call finishPluginLoading.
-            var obj = this.responseText && JSON.parse(this.responseText);
-            if (obj && obj instanceof Array && obj.length > 0) {
-                handlePluginsObject(obj);
-            } else {
-                finishPluginLoading();
-            }
-        };
-        xhr.onerror = function() {
-            finishPluginLoading();
-        };
-        xhr.open('GET', 'cordova_plugins.json', true); // Async
-        xhr.send();
-    }
-    catch(err){
-        finishPluginLoading();
+    // Don't attempt to load when running unit tests.
+    if (typeof XMLHttpRequest != 'undefined') {
+        pluginloader.load();
     }
 }(window));
 
+// file: lib/scripts/bootstrap-tizen.js
 
+require('cordova/channel').onNativeReady.fire();
 
-})();var PhoneGap = cordova;
+})();

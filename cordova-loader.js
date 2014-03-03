@@ -4,13 +4,12 @@ Loads the cordova.js file for the current platform.
 //* @protected
 (function(ctx){
 	if(!ctx.cordova && !ctx.PhoneGap) {
-		var cordovaVersion = ctx.useCordovaVersion || "2.7.0";
+		var cordovaVersion = ctx.useCordovaVersion || "2.9.1";
 		var cordovaSupport = [
 			{platform: "android"},
 			{platform: "ios"},
 			{platform: "webos"},
-			{platform: "windowsPhone", version: 8, cordovaFilename: "wp8"},
-			{platform: "windowsPhone", version: 7, cordovaFilename: "wp7"},
+			{platform: "windowsPhone"},
 			{platform: "blackberry", version: 10, cordovaFilename: "blackberry10"},
 			{platform: "blackberry"},
 			{platform: "firefoxOS"},
