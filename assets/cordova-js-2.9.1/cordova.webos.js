@@ -1114,10 +1114,14 @@ module.exports = {
 
             document.addEventListener("keydown", function(e) {
                 // back gesture/button varies by version and build
-                if(e.keyCode == 27 || e.keyCode == 461 || e.keyIdentifier == "U+1200001" ||
+                if(e.keyCode == 27 || e.keyIdentifier == "U+1200001" ||
                         e.keyIdentifier == "U+001B" || e.keyIdentifier == "Back") {
                     cordova.fireDocumentEvent("backbutton", e);
                 }
+            });
+            window.addEventListener("popstate", function(e) {
+                // back button on smart tv mapped to html5 history api
+                cordova.fireDocumentEvent("backbutton", e);
             });
         });
     }
