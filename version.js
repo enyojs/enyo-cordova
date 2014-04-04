@@ -1,3 +1,3 @@
 if (enyo && enyo.version) {
-	enyo.version["enyo-cordova"] = "2.4.0-pre.1";
+	enyo.version["enyo-cordova"] = "2014-04-04_15-16-32";
 }
