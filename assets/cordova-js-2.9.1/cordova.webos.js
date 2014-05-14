@@ -5996,7 +5996,7 @@ module.exports = {
     takePicture: function(successCallback, errorCallback, options) {
         var filename = (options || {}).filename | "";
 
-        service.request(service.protocol + service.systemPrefix + '.applicationManager', {
+        service.request(service.protocol + service.systemPrefix + 'applicationManager', {
             method: 'launch',
             parameters: {
             id: 'com.palm.app.camera',
@@ -6507,7 +6507,11 @@ navigator.connectionMonitor.start = function(onSuccess, onFailure) {
     onSuccess = this.onSuccess = onSuccess || this.onSuccess;
     this.onFailure = onFailure || this.onFailure;
     if(!navigator.connectionMonitor.request) {
-        navigator.connectionMonitor.request = service.request('luna://com.palm.connectionmanager', {
+        var conMgr = service.protocol + service.systemPrefix + 'service.connectionmanager'
+        if((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1)) {
+            service.protocol + service.systemPrefix + 'connectionmanager';
+        }
+        navigator.connectionMonitor.request = service.request(conMgr, {
             method: 'getstatus',
             parameters: { subscribe: true },
             onSuccess: function(result) {
@@ -6739,7 +6743,7 @@ module.exports = {
         var req = new LS2Request(uri, params);
         return req;
     },
-    systemPrefix: ((isLegacy) ? "com.palm" : "com.webos"),
+    systemPrefix: ((isLegacy) ? "com.palm." : "com.webos."),
     protocol: "luna://"
 };
 //temporary fallback for previous syntax
