@@ -6507,9 +6507,9 @@ navigator.connectionMonitor.start = function(onSuccess, onFailure) {
     onSuccess = this.onSuccess = onSuccess || this.onSuccess;
     this.onFailure = onFailure || this.onFailure;
     if(!navigator.connectionMonitor.request) {
-        var conMgr = service.protocol + service.systemPrefix + 'service.connectionmanager'
+        var conMgr = service.protocol + service.systemPrefix + 'service.connectionmanager';
         if((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1)) {
-            service.protocol + service.systemPrefix + 'connectionmanager';
+            conMgr = service.protocol + service.systemPrefix + 'connectionmanager';
         }
         navigator.connectionMonitor.request = service.request(conMgr, {
             method: 'getstatus',
