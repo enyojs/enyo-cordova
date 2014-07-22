@@ -1,6 +1,9 @@
-(function() {
-	if(window.cordova || window.PhoneGap) {
-		var v = window.useCordovaTVVersion||"3.0";
+/**
+ * Loads the external Cordova TV modules for webOS TV platform.
+ */
+(function(enyo, scope) {
+	if(scope.cordova || scope.PhoneGap) {
+		var v = scope.useCordovaTVVersion||"3.0";
 		var externalModules = [
 			"/usr/palm/frameworks/cordova-tv/" + v + "/advertisement.js",
 			"/usr/palm/frameworks/cordova-tv/" + v + "/billing.js",
@@ -16,4 +19,4 @@
 	} else {
 		enyo.warn("Cordova not found, ignoring tv modules");
 	}
-})();
+})(enyo, window);
