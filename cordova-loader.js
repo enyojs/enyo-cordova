@@ -1,10 +1,9 @@
 /**
-Loads the cordova.js file for the current platform.
-*/
-//* @protected
-(function(ctx){
-	if(!ctx.cordova && !ctx.PhoneGap) {
-		var cordovaVersion = ctx.useCordovaVersion || "2.9.1";
+ * Loads the cordova.js file for the current platform.
+ */
+(function(enyo, scope){
+	if(!scope.cordova && !scope.PhoneGap) {
+		var cordovaVersion = scope.useCordovaVersion || "2.9.1";
 		var cordovaSupport = [
 			{platform: "android"},
 			{platform: "ios"},
@@ -19,7 +18,7 @@ Loads the cordova.js file for the current platform.
 			{platform: "tizen"}
 		];
 		var platform;
-		if (window.PalmSystem) {
+		if (scope.PalmSystem) {
 			platform = "webos";
 		} else {
 			for (var i=0; i<cordovaSupport.length; i++) {
@@ -42,4 +41,4 @@ Loads the cordova.js file for the current platform.
 	} else {
 		enyo.warn("External cordova.js build in use, skipping script injection");
 	}
-})(window);
+})(enyo, window);
