@@ -1,4 +1,4 @@
 enyo.depends(
-	"version.js",
-	"cordova-tv.js"
+	'version.js',
+	'cordova-tv.js'
 );
