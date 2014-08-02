@@ -1009,13 +1009,12 @@ define("cordova/platform", function(require, exports, module) {
 
 /*global Mojo:false */
 
-var cordova = require('cordova');
-var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
-var externalWebOSLib = (window.webOS!=undefined);
-
 module.exports = {
     id: "webos",
     initialize: function() {
+        var cordova = require('cordova');
+        var isLegacy = /(?:web|hpw)OS\/(\d+)/.test(navigator.userAgent);
+        var externalWebOSLib = (window.webOS!=undefined);
         var modulemapper = require('cordova/modulemapper');
         modulemapper.loadMatchingModules(/cordova.*\/symbols$/);
 
@@ -5939,7 +5938,7 @@ modulemapper.clobbers('cordova/plugin/splashscreen', 'navigator.splashscreen');
 // file: lib/webos/plugin/webos/accelerometer.js
 define("cordova/plugin/webos/accelerometer", function(require, exports, module) {
 
-var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var isLegacy = /(?:web|hpw)OS\/(\d+)/.test(navigator.userAgent);
 var callback;
 var failureTimer;
 var clearTimer = function() {
@@ -6359,7 +6358,7 @@ module.exports = {
 // file: lib/webos/plugin/webos/inappbrowser.js
 define("cordova/plugin/webos/inappbrowser", function(require, exports, module) {
 
-var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var isLegacy = /(?:web|hpw)OS\/(\d+)/.test(navigator.userAgent);
 var channel = require('cordova/channel');
 var modulemapper = require('cordova/modulemapper');
 var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
@@ -6507,26 +6506,34 @@ navigator.connectionMonitor.start = function(onSuccess, onFailure) {
     onSuccess = this.onSuccess = onSuccess || this.onSuccess;
     this.onFailure = onFailure || this.onFailure;
     if(!navigator.connectionMonitor.request) {
-        var conMgr = service.protocol + service.systemPrefix + 'service.connectionmanager';
-        if((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1)) {
-            conMgr = service.protocol + service.systemPrefix + 'connectionmanager';
-        }
-        navigator.connectionMonitor.request = service.request(conMgr, {
+        var successHandler = function(result) {
+            var type = Connection.UNKNOWN;
+            if(!result.isInternetConnectionAvailable) { type = Connection.NONE; }
+            if(result.wan && result.wan.state==="connected") { type = Connection.CELL; }
+            if(result.wifi && result.wifi.onInternet) { type = Connection.WIFI; }
+            if(result.wired && result.wired.onInternet) { type = Connection.ETHERNET; }
+
+            //check for connection type change to avoid duplicate online/offline events
+            if(type != navigator.connection.type) {
+                onSuccess(type);
+            }
+        };
+        // hardcode with fallback as implementation varies
+        navigator.connectionMonitor.request = service.request("luna://com.webos.service.connectionmanager", {
             method: 'getstatus',
             parameters: { subscribe: true },
-            onSuccess: function(result) {
-                var type = Connection.UNKNOWN;
-                if(!result.isInternetConnectionAvailable) { type = Connection.NONE; }
-                if(result.wan && result.wan.state==="connected") { type = Connection.CELL; }
-                if(result.wifi && result.wifi.onInternet) { type = Connection.WIFI; }
-                if(result.wired && result.wired.onInternet) { type = Connection.ETHERNET; }
-
-                //check for connection type change to avoid duplicate online/offline events
-                if(type != navigator.connection.type) {
-                    onSuccess(type);
-                }
+            onSuccess: successHandler,
+            onFailure: function(err) {
+                navigator.connectionMonitor.stop();
+                navigator.connectionMonitor.request = service.request("luna://com.palm.connectionmanager", {
+                    method: 'getstatus',
+                    parameters: { subscribe: true },
+                    onSuccess: successHandler,
+                    onFailure: onFailure,
+                    subscribe: true,
+                    resubscribe: true
+                });
             },
-            onFailure: this.onFailure,
             subscribe: true,
             resubscribe: true
         });
@@ -6556,7 +6563,7 @@ module.exports = {
 // file: lib/webos/plugin/webos/notification.js
 define("cordova/plugin/webos/notification", function(require, exports, module) {
 
-var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var isLegacy = /(?:web|hpw)OS\/(\d+)/.test(navigator.userAgent);
 var legacyAlert = function(callback, args) {
     var modulemapper = require('cordova/modulemapper');
     var origOpen = modulemapper.getOriginalSymbol(window, 'open');
@@ -6649,7 +6656,7 @@ module.exports = function(type,size,successCallback,errorCallback) {
 // file: lib/webos/plugin/webos/service.js
 define("cordova/plugin/webos/service", function(require, exports, module) {
 
-var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+var isLegacy = /(?:web|hpw)OS\/(\d+)/.test(navigator.userAgent);
 
 function LS2Request(uri, params) {
     this.uri = uri;
