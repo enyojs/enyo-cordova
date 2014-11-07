@@ -1,3 +1,3 @@
 if (enyo && enyo.version) {
-	enyo.version["enyo-cordova"] = "2.5.2-pre.5";
+	enyo.version["enyo-cordova"] = "2.5.2-pre.6";
 }
