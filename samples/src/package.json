@@ -1,0 +1,11 @@
+{
+  "main": "index.js",
+  "libPath": "../../lib",
+  "outdir": "../",
+  "outCssFile": "samples.css",
+  "outJsFile": "samples.js",
+  "title": "Cordova Samples",
+  "style": [
+    "*.css"
+  ]
+}
