@@ -1,0 +1,9 @@
+[submodule "lib/cordova-webos"]
+	path = lib/cordova-webos
+	url = https://github.com/apache/cordova-webos
+[submodule "lib/cordova-ios"]
+	path = lib/cordova-ios
+	url = git@github.com:apache/cordova-ios.git
+[submodule "lib/cordova-js"]
+	path = lib/cordova-js
+	url = git@github.com:apache/cordova-js.git

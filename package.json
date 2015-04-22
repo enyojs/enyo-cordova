@@ -1,0 +1,34 @@
+{
+  "name": "enyo-cordova",
+  "version": "2.6.0-pre",
+  "description": "Enyo-compatible library to automatically include platform-specific Cordova library (WIP)",
+  "homepage": "http://enyojs.com/",
+  "bugs": "http://jira.enyojs.com/",
+  "main": "index.js",
+  "keywords": [
+    "framework",
+    "toolkit",
+    "components",
+    "mobile",
+    "webOS"
+  ],
+  "maintainers": [
+    {
+      "name": "Enyo JS Framework Team",
+      "web": "http://enyojs.com/"
+    }
+  ],
+  "licenses": [
+    {
+      "type": "Apache-2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ],
+  "scripts": {
+    "test": "./node_modules/.bin/gulp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/enyojs/enyo-cordova"
+  }
+}
