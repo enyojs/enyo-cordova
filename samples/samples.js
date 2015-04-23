@@ -506,7 +506,7 @@ module.exports = utils;
 },{"../../cordova-js/src/common/utils":8}],26:[function(require,module,exports){
 var
 	r = require('../../cordova-js/src/scripts/require');
-
+	
 module.exports = r;
 },{"../../cordova-js/src/scripts/require":11}],30:[function(require,module,exports){
 var	
@@ -1324,6 +1324,10 @@ module.exports = modulemapper;
 },{"../../cordova-js/src/common/modulemapper":5}],15:[function(require,module,exports){
 window.PLATFORM_VERSION_BUILD_LABEL = 'enyo-webos-custom';
 
+//include apache cordova 
+//check the specific lib include for platform for magic
+//
+//webos.js
 var
 	cordova = require('../cordova-js/src/cordova');
 
@@ -1724,16 +1728,20 @@ module.exports = init;
 require('../../../cordova/lib/init');
 
 },{"../../../cordova/lib/init":21}],16:[function(require,module,exports){
-var
-	bootstrap = require('../../cordova-js/src/scripts/bootstrap');
-
-module.exports = bootstrap;
-},{"../../cordova-js/src/scripts/bootstrap":10}],29:[function(require,module,exports){
-var
-	r = require('../../cordova/lib/require');
-	window.require = r.require;
-	window.define = r.define;
+//bootstrap the enyo environment
+var 
+	r = require('../../cordova/lib/require'),
+	exec = require('../../cordova/lib/exec'),
+	global = window || global;
 	
+	//cordova will need these at some point
+	global.require = r.require;
+	global.define = r.define;
+
+	var cordova = require('../../cordova');
+	
+	//define these for cordova to find, since cordova is built with
+	//enyo-dev
 	define('cordova', function(require, exports, module) {
 		module.exports = cordova
 	});
@@ -1741,33 +1749,40 @@ var
 	define('cordova/exec', function(require, exports, module) {
 		module.exports = exec
 	});
+
+//get cordova boostrap
+var
+	bootstrap = require('../../cordova-js/src/scripts/bootstrap');
+
+module.exports = bootstrap;
+},{"../../cordova":15,"../../cordova-js/src/scripts/bootstrap":10,"../../cordova/lib/exec":19,"../../cordova/lib/require":26}],29:[function(require,module,exports){
+//cordova brings a mini amd with it
+var 
+	r = require('../../cordova/lib/require'),
 	
-define('cordova/webos/service', function(require, exports, module) {
+	//webos cordova service lib
+	service = require('../../cordova/lib/webos/service');
+	
+	//we want to include this so it can be found later
+	//enyo doesn't use define, so when cordova is built, we
+	//just register the relevant portions of the lib
+	r.define('cordova/webos/service', function(require, exports, module) {
 		module.exports = service
 	});
-	
-var
-	global = window || global;
 
-	global.$cordova  = {
+	//how we tell cordova what exec and platform to use
+	//exec.js and platform.js will export these back to cordova
+	window.$cordova  = {
 		platform: require('../../cordova-webos/cordova-js-src/platform'),
 		exec: require('../../cordova-webos/cordova-js-src/platform')
 	};
 
+//run cordova bootstrap now that we have our platform setup
 var
-	bootstrap = require('../../cordova/lib/bootstrap'),
-	cordova = require('../../cordova'),
-	exec = require('../../cordova/lib/exec'),
-	service = require('../../cordova/lib/webos/service');
-	
+	bootstrap = require('../../cordova/lib/bootstrap');
 
-
-	//webos.bootstrap();
-
-	//modulemapper.mapModules(window);
-
-	module.exports = {};
-},{"../../cordova":15,"../../cordova-webos/cordova-js-src/platform":13,"../../cordova/lib/bootstrap":16,"../../cordova/lib/exec":19,"../../cordova/lib/require":26,"../../cordova/lib/webos/service":30}],32:[function(require,module,exports){
+	module.exports = cordova;
+},{"../../cordova-webos/cordova-js-src/platform":13,"../../cordova/lib/bootstrap":16,"../../cordova/lib/require":26,"../../cordova/lib/webos/service":30}],32:[function(require,module,exports){
 var
 	webos = require('../../lib/cordova/lib/webos');
 },{"../../lib/cordova/lib/webos":29}],31:[function(require,module,exports){
