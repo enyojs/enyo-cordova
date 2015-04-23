@@ -1,4 +1,4 @@
 var
-	cordova = require('cordova');
+	cordova = require('cordova/bootstrap');
 
 module.exports = cordova;

@@ -1,4 +1,85 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({4:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({3:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+
+// internal map of proxy function
+var CommandProxyMap = {};
+
+module.exports = {
+
+    // example: cordova.commandProxy.add("Accelerometer",{getCurrentAcceleration: function(successCallback, errorCallback, options) {...},...);
+    add:function(id,proxyObj) {
+        console.log("adding proxy for " + id);
+        CommandProxyMap[id] = proxyObj;
+        return proxyObj;
+    },
+
+    // cordova.commandProxy.remove("Accelerometer");
+    remove:function(id) {
+        var proxy = CommandProxyMap[id];
+        delete CommandProxyMap[id];
+        CommandProxyMap[id] = null;
+        return proxy;
+    },
+
+    get:function(service,action) {
+        return ( CommandProxyMap[service] ? CommandProxyMap[service][action] : null );
+    }
+};
+},{}],7:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+
+/**
+ * For already absolute URLs, returns what is passed in.
+ * For relative URLs, converts them to absolute ones.
+ */
+exports.makeAbsolute = function makeAbsolute(url) {
+    var anchorEl = document.createElement('a');
+    anchorEl.href = url;
+    return anchorEl.href;
+};
+
+
+},{}],8:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -185,7 +266,7 @@ function UUIDcreatePart(length) {
 }
 
 
-},{}],6:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -283,7 +364,7 @@ if (typeof module === "object" && typeof require === "function") {
     module.exports.define = define;
 }
 
-},{}],8:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -403,22 +484,73 @@ module.exports = {
     protocol: "luna://"
 };
 
-},{}],15:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
+module.exports = window.$cordova.platform;
+},{}],24:[function(require,module,exports){
+module.exports = {};
+},{}],20:[function(require,module,exports){
+var
+	proxy = require('../../../cordova-js/src/common/exec/proxy');
+
+module.exports = proxy;
+},{"../../../cordova-js/src/common/exec/proxy":3}],27:[function(require,module,exports){
+var
+	urlutil = require('../../cordova-js/src/common/urlutil');
+
+module.exports = urlutil;
+},{"../../cordova-js/src/common/urlutil":7}],28:[function(require,module,exports){
 var
 	utils = require('../../cordova-js/src/common/utils');
 
 module.exports = utils;
-},{"../../cordova-js/src/common/utils":4}],14:[function(require,module,exports){
+},{"../../cordova-js/src/common/utils":8}],26:[function(require,module,exports){
 var
 	r = require('../../cordova-js/src/scripts/require');
 
 module.exports = r;
-},{"../../cordova-js/src/scripts/require":6}],17:[function(require,module,exports){
+},{"../../cordova-js/src/scripts/require":11}],30:[function(require,module,exports){
 var	
 	service = require('../../../cordova-webos/cordova-js-src/webos/service');
 
 module.exports = service;
-},{"../../../cordova-webos/cordova-js-src/webos/service":8}],1:[function(require,module,exports){
+},{"../../../cordova-webos/cordova-js-src/webos/service":14}],12:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+var execProxy = require('../../cordova/lib/exec/proxy');
+
+module.exports = function(success, fail, service, action, args) {
+    var proxy = execProxy.get(service,action);
+    if(proxy) {
+        try {
+            proxy(success, fail, args);
+        } catch(e) {
+            console.log("Exception calling exec with command :: " + service + " :: " + action  + " ::exception=" + e);
+        }
+    } else {
+        fail && fail("Missing Command Error");
+    }
+};
+
+},{"../../cordova/lib/exec/proxy":20}],1:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -553,7 +685,7 @@ exports.recursiveMerge = recursiveMerge;
 exports.assignOrWrapInDeprecateGetter = assignOrWrapInDeprecateGetter;
 exports.replaceHookForTesting = function() {};
 
-},{"../../../cordova/lib/utils":15}],2:[function(require,module,exports){
+},{"../../../cordova/lib/utils":28}],2:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -808,17 +940,22 @@ channel.waitForInitialization('onDOMContentLoaded');
 
 module.exports = channel;
 
-},{"../../../cordova/lib/utils":15}],10:[function(require,module,exports){
+},{"../../../cordova/lib/utils":28}],19:[function(require,module,exports){
+var
+	webos = require('../../cordova-webos/cordova-js-src/exec');
+
+module.exports = webos;
+},{"../../cordova-webos/cordova-js-src/exec":12}],17:[function(require,module,exports){
 var
 	builder = require('../../cordova-js/src/common/builder');
 
 module.exports = builder;
-},{"../../cordova-js/src/common/builder":1}],11:[function(require,module,exports){
+},{"../../cordova-js/src/common/builder":1}],18:[function(require,module,exports){
 var
 	channel = require('../../cordova-js/src/common/channel');
 
 module.exports = channel;
-},{"../../cordova-js/src/common/channel":2}],3:[function(require,module,exports){
+},{"../../cordova-js/src/common/channel":2}],5:[function(require,module,exports){
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -935,122 +1072,7 @@ exports.getOriginalSymbol = function(context, symbolPath) {
 exports.reset();
 
 
-},{"../../../cordova/lib/builder":10}],12:[function(require,module,exports){
-var
-	modulemapper = require('../../cordova-js/src/common/modulemapper');
-
-	module.exports = modulemapper;
-},{"../../cordova-js/src/common/modulemapper":3}],7:[function(require,module,exports){
-/*
- *
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
-*/
-
-module.exports = {
-    id: 'webos',
-    bootstrap: function() {
-        var channel = require('../../cordova/lib/channel');
-        var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
-        var webOSjsLib = (window.webOS!==undefined);
-        if(!webOSjsLib && window.PalmSystem && window.PalmSystem.stageReady && isLegacy) {
-            window.PalmSystem.stageReady();
-        }
-        
-        // create global legacy Mojo object if it does not exist
-        window.Mojo = window.Mojo || {};
-
-        // Check for support for page visibility api
-        if(typeof document.webkitHidden !== "undefined") {
-            document.addEventListener("webkitvisibilitychange", function(e) {
-                if(document.webkitHidden) {
-                    channel.onPause.fire();
-                } else {
-                    channel.onResume.fire();
-                }
-            });
-        } else { //backward compatability with webOS devices that don't support Page Visibility API
-            // LunaSysMgr calls this when the windows is maximized or opened.
-            window.Mojo.stageActivated = function() {
-                channel.onResume.fire();
-            };
-            // LunaSysMgr calls this when the windows is minimized or closed.
-            window.Mojo.stageDeactivated = function() {
-                channel.onPause.fire();
-            };
-        }
-
-        if(isLegacy && !webOSjsLib) {
-            var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
-            window.cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
-            // LunaSysMgr calls this whenever an app is "launched;"
-            window.Mojo.relaunch = function(e) {
-                var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
-                if(lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
-                    window.cordova.fireDocumentEvent("menubutton");
-                    return true;
-                } else {
-                    window.cordova.fireDocumentEvent("webOSRelaunch", {type:"webOSRelaunch", detail:lp});
-                }
-            };
-        }
-        document.addEventListener("keydown", function(e) {
-            // back gesture/button varies by version and build
-            if(e.keyCode == 27 || e.keyIdentifier == "U+1200001" ||
-                    e.keyIdentifier == "U+001B" || e.keyIdentifier == "Back") {
-                window.cordova.fireDocumentEvent("backbutton", e);
-            }
-        });
-        // SmartTV webOS uses HTML5 History API, so bind to that
-        // Leave freedom upto developers to enforce History states as they please
-        // rather than enforcing particular states
-        window.addEventListener("popstate", function(e) {
-            window.cordova.fireDocumentEvent("backbutton", e);
-        });
-
-        require('../../cordova/lib/modulemapper').clobbers('cordova/webos/service', 'navigator.service');
-        channel.onNativeReady.fire();
-    }
-};
-
-},{"../../cordova/lib/channel":11,"../../cordova/lib/modulemapper":12}],13:[function(require,module,exports){
-var
-	webos = require('../../cordova-webos/cordova-js-src/platform');
-
-module.exports = webos;
-},{"../../cordova-webos/cordova-js-src/platform":7}],16:[function(require,module,exports){
-var
-	webos = require('../../cordova-webos/cordova-js-src/platform'),
-	modulemapper = require('../../cordova/lib/modulemapper');
-
-var 
-	service = require('../../cordova/lib/webos/service');
-	
-	define('cordova/webos/service', function(require, exports, module) {
-		module.exports = service
-	});
-
-	webos.bootstrap();
-
-	modulemapper.mapModules(window);
-
-	module.exports = webos;
-},{"../../cordova-webos/cordova-js-src/platform":7,"../../cordova/lib/modulemapper":12,"../../cordova/lib/webos/service":17}],5:[function(require,module,exports){
+},{"../../../cordova/lib/builder":17}],9:[function(require,module,exports){
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -1294,28 +1316,466 @@ var cordova = {
 
 module.exports = cordova;
 
-},{"../../cordova/lib/channel":11,"../../cordova/lib/platform":13}],9:[function(require,module,exports){
+},{"../../cordova/lib/channel":18,"../../cordova/lib/platform":23}],22:[function(require,module,exports){
+var
+	modulemapper = require('../../cordova-js/src/common/modulemapper');
+
+module.exports = modulemapper;
+},{"../../cordova-js/src/common/modulemapper":5}],15:[function(require,module,exports){
 window.PLATFORM_VERSION_BUILD_LABEL = 'enyo-webos-custom';
 
 var
-	r = require('../cordova/lib/require');
-	window.require = r.require;
-	window.define = r.define;
-
-var
-	cordova = require('../cordova-js/src/cordova.js');
+	cordova = require('../cordova-js/src/cordova');
 
 module.exports = window.cordova = cordova;
-},{"../cordova-js/src/cordova.js":5,"../cordova/lib/require":14}],19:[function(require,module,exports){
+},{"../cordova-js/src/cordova":9}],6:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+var modulemapper = require('../../../cordova/lib/modulemapper');
+var urlutil = require('../../../cordova/lib/urlutil');
+
+// Helper function to inject a <script> tag.
+// Exported for testing.
+exports.injectScript = function(url, onload, onerror) {
+    var script = document.createElement("script");
+    // onload fires even when script fails loads with an error.
+    script.onload = onload;
+    // onerror fires for malformed URLs.
+    script.onerror = onerror;
+    script.src = url;
+    document.head.appendChild(script);
+};
+
+function injectIfNecessary(id, url, onload, onerror) {
+    onerror = onerror || onload;
+    if (id in define.moduleMap) {
+        onload();
+    } else {
+        exports.injectScript(url, function() {
+            if (id in define.moduleMap) {
+                onload();
+            } else {
+                onerror();
+            }
+        }, onerror);
+    }
+}
+
+function onScriptLoadingComplete(moduleList, finishPluginLoading) {
+    // Loop through all the plugins and then through their clobbers and merges.
+    for (var i = 0, module; module = moduleList[i]; i++) {
+        if (module.clobbers && module.clobbers.length) {
+            for (var j = 0; j < module.clobbers.length; j++) {
+                modulemapper.clobbers(module.id, module.clobbers[j]);
+            }
+        }
+
+        if (module.merges && module.merges.length) {
+            for (var k = 0; k < module.merges.length; k++) {
+                modulemapper.merges(module.id, module.merges[k]);
+            }
+        }
+
+        // Finally, if runs is truthy we want to simply require() the module.
+        if (module.runs) {
+            modulemapper.runs(module.id);
+        }
+    }
+
+    finishPluginLoading();
+}
+
+// Handler for the cordova_plugins.js content.
+// See plugman's plugin_loader.js for the details of this object.
+// This function is only called if the really is a plugins array that isn't empty.
+// Otherwise the onerror response handler will just call finishPluginLoading().
+function handlePluginsObject(path, moduleList, finishPluginLoading) {
+    // Now inject the scripts.
+    var scriptCounter = moduleList.length;
+
+    if (!scriptCounter) {
+        finishPluginLoading();
+        return;
+    }
+    function scriptLoadedCallback() {
+        if (!--scriptCounter) {
+            onScriptLoadingComplete(moduleList, finishPluginLoading);
+        }
+    }
+
+    for (var i = 0; i < moduleList.length; i++) {
+        injectIfNecessary(moduleList[i].id, path + moduleList[i].file, scriptLoadedCallback);
+    }
+}
+
+function findCordovaPath() {
+    var path = null;
+    var scripts = document.getElementsByTagName('script');
+    var term = '/cordova.js';
+    for (var n = scripts.length-1; n>-1; n--) {
+        var src = scripts[n].src.replace(/\?.*$/, ''); // Strip any query param (CB-6007).
+        if (src.indexOf(term) == (src.length - term.length)) {
+            path = src.substring(0, src.length - term.length) + '/';
+            break;
+        }
+    }
+    return path;
+}
+
+// Tries to load all plugins' js-modules.
+// This is an async process, but onDeviceReady is blocked on onPluginsReady.
+// onPluginsReady is fired when there are no plugins to load, or they are all done.
+exports.load = function(callback) {
+    var pathPrefix = findCordovaPath();
+    if (pathPrefix === null) {
+        console.log('Could not find cordova.js script tag. Plugin loading may fail.');
+        pathPrefix = '';
+    }
+    injectIfNecessary('cordova/plugin_list', pathPrefix + 'cordova_plugins.js', function() {
+        var moduleList = require("../../../cordova/lib/plugin_list");
+        handlePluginsObject(pathPrefix, moduleList, callback);
+    }, callback);
+};
+
+
+},{"../../../cordova/lib/modulemapper":22,"../../../cordova/lib/plugin_list":24,"../../../cordova/lib/urlutil":27}],13:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+module.exports = {
+    id: 'webos',
+    bootstrap: function() {
+        var channel = require('../../cordova/lib/channel');
+        var isLegacy = ((navigator.userAgent.indexOf("webOS")>-1) || (navigator.userAgent.indexOf("hpwOS")>-1));
+        var webOSjsLib = (window.webOS!==undefined);
+        if(!webOSjsLib && window.PalmSystem && window.PalmSystem.stageReady && isLegacy) {
+            window.PalmSystem.stageReady();
+        }
+        
+        // create global legacy Mojo object if it does not exist
+        window.Mojo = window.Mojo || {};
+
+        // Check for support for page visibility api
+        if(typeof document.webkitHidden !== "undefined") {
+            document.addEventListener("webkitvisibilitychange", function(e) {
+                if(document.webkitHidden) {
+                    channel.onPause.fire();
+                } else {
+                    channel.onResume.fire();
+                }
+            });
+        } else { //backward compatability with webOS devices that don't support Page Visibility API
+            // LunaSysMgr calls this when the windows is maximized or opened.
+            window.Mojo.stageActivated = function() {
+                channel.onResume.fire();
+            };
+            // LunaSysMgr calls this when the windows is minimized or closed.
+            window.Mojo.stageDeactivated = function() {
+                channel.onPause.fire();
+            };
+        }
+
+        if(isLegacy && !webOSjsLib) {
+            var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
+            window.cordova.fireDocumentEvent("webOSLaunch", {type:"webOSLaunch", detail:lp});
+            // LunaSysMgr calls this whenever an app is "launched;"
+            window.Mojo.relaunch = function(e) {
+                var lp = JSON.parse(PalmSystem.launchParams || "{}") || {};
+                if(lp['palm-command'] && lp['palm-command'] == 'open-app-menu') {
+                    window.cordova.fireDocumentEvent("menubutton");
+                    return true;
+                } else {
+                    window.cordova.fireDocumentEvent("webOSRelaunch", {type:"webOSRelaunch", detail:lp});
+                }
+            };
+        }
+        document.addEventListener("keydown", function(e) {
+            // back gesture/button varies by version and build
+            if(e.keyCode == 27 || e.keyIdentifier == "U+1200001" ||
+                    e.keyIdentifier == "U+001B" || e.keyIdentifier == "Back") {
+                window.cordova.fireDocumentEvent("backbutton", e);
+            }
+        });
+        // SmartTV webOS uses HTML5 History API, so bind to that
+        // Leave freedom upto developers to enforce History states as they please
+        // rather than enforcing particular states
+        window.addEventListener("popstate", function(e) {
+            window.cordova.fireDocumentEvent("backbutton", e);
+        });
+
+        require('../../cordova/lib/modulemapper').clobbers('cordova/webos/service', 'navigator.service');
+        channel.onNativeReady.fire();
+    }
+};
+
+},{"../../cordova/lib/channel":18,"../../cordova/lib/modulemapper":22}],25:[function(require,module,exports){
 var
-	cordova = require('../../lib/cordova'),
+	pluginloader = require('../../cordova-js/src/common/pluginloader');
+
+module.exports = pluginloader;
+},{"../../cordova-js/src/common/pluginloader":6}],4:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+var channel = require('../../../cordova/lib/channel');
+var cordova = require('../../../cordova');
+var modulemapper = require('../../../cordova/lib/modulemapper');
+var platform = require('../../../cordova/lib/platform');
+var pluginloader = require('../../../cordova/lib/pluginloader');
+var utils = require('../../../cordova/lib/utils');
+
+var platformInitChannelsArray = [channel.onNativeReady, channel.onPluginsReady];
+
+function logUnfiredChannels(arr) {
+    for (var i = 0; i < arr.length; ++i) {
+        if (arr[i].state != 2) {
+            console.log('Channel not fired: ' + arr[i].type);
+        }
+    }
+}
+
+window.setTimeout(function() {
+    if (channel.onDeviceReady.state != 2) {
+        console.log('deviceready has not fired after 5 seconds.');
+        logUnfiredChannels(platformInitChannelsArray);
+        logUnfiredChannels(channel.deviceReadyChannelsArray);
+    }
+}, 5000);
+
+// Replace navigator before any modules are required(), to ensure it happens as soon as possible.
+// We replace it so that properties that can't be clobbered can instead be overridden.
+function replaceNavigator(origNavigator) {
+    var CordovaNavigator = function() {};
+    CordovaNavigator.prototype = origNavigator;
+    var newNavigator = new CordovaNavigator();
+    // This work-around really only applies to new APIs that are newer than Function.bind.
+    // Without it, APIs such as getGamepads() break.
+    if (CordovaNavigator.bind) {
+        for (var key in origNavigator) {
+            if (typeof origNavigator[key] == 'function') {
+                newNavigator[key] = origNavigator[key].bind(origNavigator);
+            }
+            else {
+                (function(k) {
+                    utils.defineGetterSetter(newNavigator,key,function() {
+                        return origNavigator[k];
+                    });
+                })(key);
+            }
+        }
+    }
+    return newNavigator;
+}
+
+if (window.navigator) {
+    window.navigator = replaceNavigator(window.navigator);
+}
+
+if (!window.console) {
+    window.console = {
+        log: function(){}
+    };
+}
+if (!window.console.warn) {
+    window.console.warn = function(msg) {
+        this.log("warn: " + msg);
+    };
+}
+
+// Register pause, resume and deviceready channels as events on document.
+channel.onPause = cordova.addDocumentEventHandler('pause');
+channel.onResume = cordova.addDocumentEventHandler('resume');
+channel.onDeviceReady = cordova.addStickyDocumentEventHandler('deviceready');
+
+// Listen for DOMContentLoaded and notify our channel subscribers.
+if (document.readyState == 'complete' || document.readyState == 'interactive') {
+    channel.onDOMContentLoaded.fire();
+} else {
+    document.addEventListener('DOMContentLoaded', function() {
+        channel.onDOMContentLoaded.fire();
+    }, false);
+}
+
+// _nativeReady is global variable that the native side can set
+// to signify that the native code is ready. It is a global since
+// it may be called before any cordova JS is ready.
+if (window._nativeReady) {
+    channel.onNativeReady.fire();
+}
+
+modulemapper.clobbers('cordova', 'cordova');
+modulemapper.clobbers('cordova/exec', 'cordova.exec');
+modulemapper.clobbers('cordova/exec', 'Cordova.exec');
+
+// Call the platform-specific initialization.
+platform.bootstrap && platform.bootstrap();
+
+// Wrap in a setTimeout to support the use-case of having plugin JS appended to cordova.js.
+// The delay allows the attached modules to be defined before the plugin loader looks for them.
+setTimeout(function() {
+    pluginloader.load(function() {
+        channel.onPluginsReady.fire();
+    });
+}, 0);
+
+/**
+ * Create all cordova objects once native side is ready.
+ */
+channel.join(function() {
+    modulemapper.mapModules(window);
+
+    platform.initialize && platform.initialize();
+
+    // Fire event to notify that all objects are created
+    channel.onCordovaReady.fire();
+
+    // Fire onDeviceReady event once page has fully loaded, all
+    // constructors have run and cordova info has been received from native
+    // side.
+    channel.join(function() {
+        //require('cordova').fireDocumentEvent('deviceready');
+    }, channel.deviceReadyChannelsArray);
+
+}, platformInitChannelsArray);
+
+
+},{"../../../cordova":15,"../../../cordova/lib/channel":18,"../../../cordova/lib/modulemapper":22,"../../../cordova/lib/platform":23,"../../../cordova/lib/pluginloader":25,"../../../cordova/lib/utils":28}],21:[function(require,module,exports){
+var
+	init = require('../../cordova-js/src/common/init');
+
+module.exports = init;
+},{"../../cordova-js/src/common/init":4}],10:[function(require,module,exports){
+/*
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+*/
+
+require('../../../cordova/lib/init');
+
+},{"../../../cordova/lib/init":21}],16:[function(require,module,exports){
+var
+	bootstrap = require('../../cordova-js/src/scripts/bootstrap');
+
+module.exports = bootstrap;
+},{"../../cordova-js/src/scripts/bootstrap":10}],29:[function(require,module,exports){
+var
+	r = require('../../cordova/lib/require');
+	window.require = r.require;
+	window.define = r.define;
+	
+	define('cordova', function(require, exports, module) {
+		module.exports = cordova
+	});
+
+	define('cordova/exec', function(require, exports, module) {
+		module.exports = exec
+	});
+	
+define('cordova/webos/service', function(require, exports, module) {
+		module.exports = service
+	});
+	
+var
+	global = window || global;
+
+	global.$cordova  = {
+		platform: require('../../cordova-webos/cordova-js-src/platform'),
+		exec: require('../../cordova-webos/cordova-js-src/platform')
+	};
+
+var
+	bootstrap = require('../../cordova/lib/bootstrap'),
+	cordova = require('../../cordova'),
+	exec = require('../../cordova/lib/exec'),
+	service = require('../../cordova/lib/webos/service');
+	
+
+
+	//webos.bootstrap();
+
+	//modulemapper.mapModules(window);
+
+	module.exports = {};
+},{"../../cordova":15,"../../cordova-webos/cordova-js-src/platform":13,"../../cordova/lib/bootstrap":16,"../../cordova/lib/exec":19,"../../cordova/lib/require":26,"../../cordova/lib/webos/service":30}],32:[function(require,module,exports){
+var
 	webos = require('../../lib/cordova/lib/webos');
-},{"../../lib/cordova":9,"../../lib/cordova/lib/webos":16}],18:[function(require,module,exports){
+},{"../../lib/cordova/lib/webos":29}],31:[function(require,module,exports){
 var
 	samples = {
 		webos: require('./webos')
 	};
-},{"./webos":19}]},{},[18])
+},{"./webos":32}]},{},[31])
 
 
 //# sourceMappingURL=samples.js.map
